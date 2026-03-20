@@ -1,0 +1,53 @@
+name: shuddha_sangeetham
+description: Shuddha Sangeetham — Offline Carnatic music reference app.
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: ">=3.22.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Database — drift (SQLite ORM with type-safe queries)
+  drift: ^2.19.0
+  drift_flutter: ^0.2.1
+  sqlite3_flutter_libs: ^0.5.24
+
+  # State management
+  flutter_riverpod: ^2.5.1
+  riverpod_annotation: ^2.3.5
+
+  # Storage & path utilities
+  path_provider: ^2.1.3
+  path: ^1.9.0
+
+  # Shared preferences (theme override persistence)
+  shared_preferences: ^2.3.2
+
+  # URL launcher (karnatik.com links)
+  url_launcher: ^6.3.0
+
+  # Icons
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  # Code generation
+  build_runner: ^2.4.12
+  drift_dev: ^2.19.0
+  riverpod_generator: ^2.4.3
+
+  # Lints
+  flutter_lints: ^4.0.0
+
+flutter:
+  uses-material-design: true
+
+  assets:
+    # Bundled SQLite database will be placed here at build time (Session 2)
+    # - assets/db/shuddha_sangeetham.db
