@@ -4,7 +4,7 @@ publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.3.0 <4.0.0'
+  sdk: '>=3.5.0 <4.0.0'
   flutter: ">=3.22.0"
 
 dependencies:
@@ -17,8 +17,8 @@ dependencies:
   sqlite3_flutter_libs: ^0.5.24
 
   # State management
-  flutter_riverpod: ^2.5.1
-  riverpod_annotation: ^2.3.5
+  flutter_riverpod: ^3.0.0
+  riverpod_annotation: ^3.0.0
 
   # Storage & path utilities
   path_provider: ^2.1.3
@@ -38,9 +38,12 @@ dev_dependencies:
     sdk: flutter
 
   # Code generation
-  build_runner: ^2.4.12
+  build_runner: ^2.14.0
   drift_dev: ^2.19.0
-  riverpod_generator: ^2.4.3
+  riverpod_generator: ^3.0.0
+
+  # Native SQLite for unit tests (NativeDatabase.memory())
+  sqlite3: ^2.4.6
 
   # Lints
   flutter_lints: ^4.0.0
@@ -48,6 +51,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  assets:
-    # Bundled SQLite database will be placed here at build time (Session 2)
-    # - assets/db/shuddha_sangeetham.db
+  # assets:
+  #   - assets/db/shuddha_sangeetham.db  # Bundled SQLite DB added at build time (Session 2)

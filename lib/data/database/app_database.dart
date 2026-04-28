@@ -1,5 +1,6 @@
 import 'package:drift/drift.dart';
 
+import '../seed/seed_loader.dart';
 import 'tables/artists.dart';
 import 'tables/bookmarks.dart';
 import 'tables/composers.dart';
@@ -47,6 +48,7 @@ class AppDatabase extends _$AppDatabase {
           await m.createAll();
           await _createFts5Tables(m);
           await _createIndexes();
+          await SeedLoader(this).seedSearchAliases();
         },
         onUpgrade: _onMigrate,
         beforeOpen: (details) async {
