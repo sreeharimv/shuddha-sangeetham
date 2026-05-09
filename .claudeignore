@@ -1,0 +1,33 @@
+# Build outputs
+build/
+.dart_tool/
+
+# Generated Drift files (read the source .dart, not the generated counterpart)
+**/*.g.dart
+**/*.freezed.dart
+
+# iOS/Android native project files
+ios/
+android/
+
+# Python scraper virtualenv and cache
+scraper/__pycache__/
+scraper/.venv/
+scraper/venv/
+scraper/*.pyc
+
+# Lock files
+pubspec.lock
+
+# Large asset/data files
+assets/
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE and OS
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db

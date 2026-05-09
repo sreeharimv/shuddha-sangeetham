@@ -217,8 +217,6 @@ CREATE VIRTUAL TABLE IF NOT EXISTS krithis_fts USING fts5(
     pallavi,
     anupallavi,
     charanam,
-    content='krithis',
-    content_rowid='id',
     tokenize='unicode61'
 );
 
@@ -417,9 +415,7 @@ def build_db(rows: list[dict], db_path: Path) -> None:
     # Seed curated aliases after all reference rows are in
     seed_curated_aliases(cur)
 
-    # Rebuild FTS index to cover all rows (triggers handle incremental updates;
-    # this ensures consistency after a full rebuild)
-    cur.execute("INSERT INTO krithis_fts(krithis_fts) VALUES('rebuild')")
+    # FTS is a standalone table populated by triggers; no rebuild needed
 
     con.commit()
 

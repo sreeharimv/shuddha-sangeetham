@@ -74,12 +74,18 @@ def _text(element) -> str:
     return element.get_text(separator=" ", strip=True) if element else ""
 
 
-# Section labels used in the lyrics area (as plain <p> text)
-_SECTION_RE = re.compile(
-    r"^\s*(pallavi|anupallavi|caraNam|caranam|charanam\s*\d*|"
-    r"madhyama\s*kaalam|chitta\s*swaram|swarajati|meaning|notation|other\s*information)\s*$",
+# Exact section label (whole <p> is just the label, optionally with raga name suffix for ragamalikas)
+# e.g. "pallavi", "caraNam 1", "caraNam 1naaTTai kurinji"
+_SECTION_LABEL_RE = re.compile(
+    r"^\s*(pallavi|anupallavi|caraNam\s*\d*|caranam\s*\d*|charanam\s*\d*|"
+    r"madhyama\s*kaalam|chitta\s*swaram|swarajati|meaning|notation|other\s*information)",
     re.I,
 )
+# Kept for backward-compat in exact-match checks
+_SECTION_RE = _SECTION_LABEL_RE
+
+# Swara notation lines — skip these (sol-fa syllables only, no vowels)
+_SWARA_RE = re.compile(r"^[srgmpdn,;|.()\s\d]+$", re.I)
 
 # Metadata labels that appear inline in the content TD
 _RAAGAM_RE = re.compile(r"raagam\s*:", re.I)
@@ -134,12 +140,16 @@ def parse_krithi_page(html: str, page_id: int) -> dict | None:
     if td is None:
         return None
 
-    # Quick guard
-    if not re.search(r"\bpallavi\b", td.get_text(), re.I):
-        return None
-
     # ---- Krithi name from <title> ----------------------------------------
     name = title.split(" - ", 1)[1].strip() if " - " in title else ""
+
+    # Detect composition type from title/name (bhajan, kaNNi, noTTusvarA, etc.)
+    _COMP_TYPE_RE = re.compile(
+        r"\b(bhajan|kaNNi|kanni|noTTusvar[aA]|nottaswara|nottuswara|nottu\b|varnam|varNa|tillAnA|tillana|padam|javali|swarajati)\b",
+        re.I,
+    )
+    comp_type_m = _COMP_TYPE_RE.search(name)
+    composition_type = comp_type_m.group(1).lower() if comp_type_m else ""
 
     # ---- Walk all <p> elements inside the TD in document order -------------
     all_ps = td.find_all("p")
@@ -165,16 +175,33 @@ def parse_krithi_page(html: str, page_id: int) -> dict | None:
             break
 
         # ---- Section label detection ----------------------------------------
-        if _SECTION_RE.match(p_stripped):
-            label = p_stripped.lower()
-            if "pallavi" == label:
+        # Labels may have content on the same line:
+        #   "pallavi sarasIruhAkSi..." → label + inline lyric
+        #   "pallavisaavEri"           → ragamalika label + raga name (no lyric)
+        #   "caraNam 1naaTTai kurinji" → caranam label + raga name
+        m_label = _SECTION_LABEL_RE.match(p_stripped)
+        if m_label:
+            label = m_label.group(1).lower().strip()
+            remainder = p_stripped[m_label.end():].strip()
+
+            if label == "pallavi":
                 current_section = "pallavi"
                 lyrics_started = True
-            elif "anupallavi" == label:
+            elif label == "anupallavi":
                 current_section = "anupallavi"
             elif re.match(r"caran|charanam", label, re.I):
                 current_section = "caranam"
-            # madhyama kaalam / chitta swaram remain part of caranam
+            # madhyama kaalam / chitta swaram / swarajati stay in current section
+
+            # If there's lyric text after the label on the same line, capture it.
+            # Exclude pure raga-name suffixes (no spaces after single word) and swara lines.
+            if remainder and " " in remainder and not _SWARA_RE.match(remainder):
+                if current_section == "pallavi":
+                    pallavi_parts.append(remainder)
+                elif current_section == "anupallavi":
+                    anupallavi_parts.append(remainder)
+                elif current_section == "caranam":
+                    charanam_parts.append(remainder)
             continue
 
         # ---- Metadata (before first lyric section label) --------------------
@@ -185,7 +212,9 @@ def parse_krithi_page(html: str, page_id: int) -> dict | None:
                 if a:
                     raga_name = _text(a)
                 else:
-                    raga_name = re.split(r"raagam\s*:", p_text, flags=re.I)[-1].strip()
+                    raw_raga = re.split(r"raagam\s*:", p_text, flags=re.I)[-1].strip()
+                    # Strip trailing metadata labels (taaLam:/Composer:/Language:) if raga is empty
+                    raga_name = re.split(r"\s*(?:taaLam|Composer|Language)\s*:", raw_raga, flags=re.I)[0].strip()
                 # name may be embedded before "raagam:" in P[1]
                 if not name:
                     before_raga = re.split(r"raagam\s*:", p_text, flags=re.I)[0].strip()
@@ -218,7 +247,17 @@ def parse_krithi_page(html: str, page_id: int) -> dict | None:
             continue
 
         # ---- Lyric content --------------------------------------------------
-        if not p_stripped or _SECTION_RE.match(p_stripped):
+        if not p_stripped:
+            continue
+
+        # Skip swara notation lines (e.g. "srgsr,mpdpd,|RSnd...")
+        if _SWARA_RE.match(p_stripped):
+            continue
+
+        # Skip italic sub-raga info blocks inside ragamalikas
+        # (arohana/avarohana lines that appear between caranams)
+        if p.find("i") and (_AROHANA_RE.search(p_stripped) or _AVAROHANA_RE.search(p_stripped)
+                             or re.match(r"^\d+\s+\w", p_stripped)):
             continue
 
         if current_section == "pallavi":
@@ -232,8 +271,59 @@ def parse_krithi_page(html: str, page_id: int) -> dict | None:
     anupallavi = "\n".join(anupallavi_parts).strip()
     charanam = "\n".join(charanam_parts).strip()
 
+    # Fallback for non-krithi structured pages (bhajan, kaNNi, noTTusvarA, etc.):
+    # if no section labels were found but the page has carnatic metadata, collect
+    # all non-metadata paragraphs as the lyric body stored in `pallavi`.
     if not pallavi:
-        return None
+        # Must have carnatic metadata labels present (even if values are empty)
+        td_full_text = td.get_text()
+        has_carnatic_labels = (
+            _RAAGAM_RE.search(td_full_text) and _TAALAM_RE.search(td_full_text)
+        )
+        if not has_carnatic_labels:
+            return None
+        fallback_parts: list[str] = []
+        metadata_done = False
+        for p in td.find_all("p"):
+            p_stripped = p.get_text(separator=" ", strip=True).strip()
+            if not p_stripped:
+                continue
+            if re.match(r"^(Meaning|Notation|Other\s+information|Contact\s+us)\s*[:\.]?$", p_stripped, re.I):
+                break
+            # Skip lines that look like metadata labels
+            if (_RAAGAM_RE.search(p_stripped) or _TAALAM_RE.search(p_stripped)
+                    or _AROHANA_RE.search(p_stripped) or _AVAROHANA_RE.search(p_stripped)):
+                metadata_done = True
+                continue
+            # Skip raga scale lines (e.g. "29 dheera shankaraabharaNam mela Aa: ...")
+            if re.match(r"^\d+\s+\w.*\bAa\s*:", p_stripped):
+                metadata_done = True
+                continue
+            if not metadata_done:
+                continue
+            # Skip swara notation lines
+            if _SWARA_RE.match(p_stripped):
+                continue
+            # Skip numbered verse markers (e.g. "1", "2", ...)
+            if re.match(r"^\d+$", p_stripped):
+                continue
+            # Skip stray single-character artifacts
+            if len(p_stripped) <= 1:
+                continue
+            fallback_parts.append(p_stripped)
+        pallavi = "\n".join(fallback_parts).strip()
+        # Strip stray leading punctuation/symbols from fallback lyrics
+        pallavi = re.sub(r"^[<>\|\s]+", "", pallavi).strip()
+        if not pallavi:
+            return None
+
+    # Fallback raga extraction: scan all <a> tags with raga hrefs
+    if not raga_name:
+        for a in td.find_all("a", href=re.compile(r"raga", re.I)):
+            candidate = _text(a).strip()
+            if candidate and not re.match(r"https?://", candidate):
+                raga_name = candidate
+                break
 
     return {
         "page_id": page_id,
@@ -245,7 +335,7 @@ def parse_krithi_page(html: str, page_id: int) -> dict | None:
         "tala": tala,
         "composer": composer,
         "language": language,
-        "composition_type": "",
+        "composition_type": composition_type,
         "pallavi": pallavi,
         "anupallavi": anupallavi,
         "charanam": charanam,

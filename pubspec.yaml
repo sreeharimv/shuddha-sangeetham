@@ -51,5 +51,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # assets:
-  #   - assets/db/shuddha_sangeetham.db  # Bundled SQLite DB added at build time (Session 2)
+  assets:
+    - assets/images/ss_logo.jpg
+    - assets/db/shuddha_sangeetham.db
