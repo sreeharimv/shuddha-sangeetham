@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Shuddha Sangeetham — Admin CMS</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="login-screen" class="screen">
+    <div class="login-box">
+      <h1>Shuddha Sangeetham</h1>
+      <p class="subtitle">Admin CMS</p>
+      <form id="login-form">
+      <label>Username
+        <input id="login-username" type="text" placeholder="admin" autocomplete="username" />
+      </label>
+      <label>Password
+        <input id="login-password" type="password" placeholder="••••••••" autocomplete="current-password" />
+      </label>
+      <button id="login-btn" type="submit">Sign in</button>
+      </form>
+      <p id="login-error" class="error hidden"></p>
+    </div>
+  </div>
+
+  <div id="app-screen" class="screen hidden">
+    <aside class="sidebar">
+      <div class="logo">
+        <span class="logo-title">Shuddha Sangeetham</span>
+        <span class="logo-sub">Admin CMS</span>
+      </div>
+      <nav>
+        <button class="nav-btn active" data-section="dashboard">Dashboard</button>
+        <button class="nav-btn" data-section="krithis">Krithis</button>
+        <button class="nav-btn" data-section="ragas">Ragas</button>
+        <button class="nav-btn" data-section="composers">Composers</button>
+        <button class="nav-btn" data-section="talas">Talas</button>
+        <button class="nav-btn" data-section="import">Bulk Import</button>
+        <button class="nav-btn" data-section="scraper">Scraper</button>
+        <button class="nav-btn" data-section="synclog">Sync Log</button>
+      </nav>
+      <button id="logout-btn" class="logout-btn">Disconnect</button>
+    </aside>
+
+    <main class="content">
+      <!-- Dashboard -->
+      <section id="section-dashboard" class="section">
+        <h2>Dashboard</h2>
+        <div class="stat-grid">
+          <div class="stat-card"><span id="stat-krithis" class="stat-num">—</span><span class="stat-label">Krithis</span></div>
+          <div class="stat-card"><span id="stat-ragas" class="stat-num">—</span><span class="stat-label">Ragas</span></div>
+          <div class="stat-card"><span id="stat-composers" class="stat-num">—</span><span class="stat-label">Composers</span></div>
+          <div class="stat-card"><span id="stat-talas" class="stat-num">—</span><span class="stat-label">Talas</span></div>
+        </div>
+        <div id="scraper-status-badge" class="scraper-badge hidden">Scraper running…</div>
+        <h3 style="margin-top:2rem">Recent Activity</h3>
+        <div id="dashboard-log"></div>
+      </section>
+
+      <!-- Krithis -->
+      <section id="section-krithis" class="section hidden">
+        <div class="section-header">
+          <h2>Krithis</h2>
+          <button class="btn-primary" onclick="openKrithiForm()">+ Add Krithi</button>
+        </div>
+        <div class="search-bar">
+          <input id="krithi-search" type="text" placeholder="Search by name, composer, raga…" />
+          <button onclick="loadKrithis()">Search</button>
+        </div>
+        <div id="krithis-table-wrap"></div>
+        <div class="pagination" id="krithis-pagination"></div>
+      </section>
+
+      <!-- Ragas -->
+      <section id="section-ragas" class="section hidden">
+        <div class="section-header">
+          <h2>Ragas</h2>
+          <button class="btn-primary" onclick="openRagaForm()">+ Add Raga</button>
+        </div>
+        <div class="search-bar">
+          <input id="raga-search" type="text" placeholder="Search ragas…" />
+          <button onclick="loadRagas()">Search</button>
+        </div>
+        <div id="ragas-table-wrap"></div>
+      </section>
+
+      <!-- Composers -->
+      <section id="section-composers" class="section hidden">
+        <div class="section-header">
+          <h2>Composers</h2>
+          <button class="btn-primary" onclick="openComposerForm()">+ Add Composer</button>
+        </div>
+        <div class="search-bar">
+          <input id="composer-search" type="text" placeholder="Search composers…" />
+          <button onclick="loadComposers()">Search</button>
+        </div>
+        <div id="composers-table-wrap"></div>
+      </section>
+
+      <!-- Talas -->
+      <section id="section-talas" class="section hidden">
+        <div class="section-header">
+          <h2>Talas</h2>
+          <button class="btn-primary" onclick="openTalaForm()">+ Add Tala</button>
+        </div>
+        <div id="talas-table-wrap"></div>
+      </section>
+
+      <!-- Bulk Import -->
+      <section id="section-import" class="section hidden">
+        <h2>Bulk Import</h2>
+        <p>Upload a JSON file containing an array of krithi objects from the scraper output.</p>
+        <p>Each object should have: <code>name, composer, raga, tala, language, composition_type, pallavi</code> (plus optional <code>anupallavi, charanam, source_url</code>).</p>
+        <div class="import-zone" id="drop-zone">
+          <p>Drop a JSON file here or</p>
+          <label class="btn-primary file-label">
+            Choose File
+            <input type="file" id="import-file" accept=".json" style="display:none" />
+          </label>
+        </div>
+        <div id="import-preview" class="hidden">
+          <p id="import-count"></p>
+          <button class="btn-primary" id="import-submit-btn">Import</button>
+        </div>
+        <div id="import-result"></div>
+      </section>
+
+      <!-- Scraper -->
+      <section id="section-scraper" class="section hidden">
+        <h2>Scraper</h2>
+        <p>Triggers the Python karnatik.com scraper on the backend server. The scraper runs overnight (~12–14 hours) and is safe to run while the app is live.</p>
+        <div class="scraper-panel">
+          <div id="scraper-panel-status" class="scraper-panel-status">Checking status…</div>
+          <button class="btn-danger" id="run-scraper-btn" onclick="runScraper()">Run Scraper</button>
+        </div>
+        <p class="hint">Results appear in the Sync Log after the scraper finishes.</p>
+      </section>
+
+      <!-- Sync Log -->
+      <section id="section-synclog" class="section hidden">
+        <h2>Sync Log</h2>
+        <button onclick="loadSyncLog()">Refresh</button>
+        <div id="synclog-list"></div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal -->
+  <div id="modal" class="modal hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 id="modal-title">Edit</h3>
+        <button class="modal-close" onclick="closeModal()">✕</button>
+      </div>
+      <form id="modal-form" onsubmit="handleFormSubmit(event)">
+        <div id="modal-fields"></div>
+        <div class="modal-footer">
+          <button type="button" onclick="closeModal()">Cancel</button>
+          <button type="submit" class="btn-primary">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

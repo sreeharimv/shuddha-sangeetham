@@ -27,7 +27,7 @@ from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
 
-from flask import Flask, abort, g, jsonify, request
+from flask import Flask, abort, g, jsonify, request, send_from_directory
 from flask_cors import CORS
 
 # ---------------------------------------------------------------------------
@@ -595,6 +595,23 @@ def scraper_status():
 def sync_log():
     limit = min(int(request.args.get("limit", 50)), 200)
     return jsonify(_read_sync_log()[:limit])
+
+
+# ---------------------------------------------------------------------------
+# Frontend static files
+# ---------------------------------------------------------------------------
+
+STATIC_DIR = Path(__file__).parent / "static"
+
+
+@app.get("/")
+def index():
+    return send_from_directory(STATIC_DIR, "index.html")
+
+
+@app.get("/<path:filename>")
+def static_files(filename):
+    return send_from_directory(STATIC_DIR, filename)
 
 
 # ---------------------------------------------------------------------------
