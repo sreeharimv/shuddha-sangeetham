@@ -58,9 +58,9 @@ SearchAlias table seeded with curated spelling variants (Thyagaraja→Tyagaraja,
 | 5 | Browse screen | ✅ Done |
 | 6 | Krithi Detail Page | ✅ Done |
 | 7 | Bookmarks screen | ✅ Done |
-| 8 | Settings / Profile screen | — |
-| 9 | Delta sync | — |
-| 10 | Admin CMS | — |
+| 8 | Settings / Profile screen | ✅ Done |
+| 9 | Delta sync | ✅ Done |
+| 10 | Admin CMS | ✅ Done |
 | 11 | Polish + testing | — |
 
 ## v1 Scope Constraints

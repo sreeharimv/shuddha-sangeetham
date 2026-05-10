@@ -1,0 +1,179 @@
+/* ============================================================
+   Shuddha Sangeetham Admin CMS — stylesheet
+   ============================================================ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg: #f5f4f0;
+  --surface: #fff;
+  --border: #ddd;
+  --primary: #8b4513;      /* saddlebrown — matches Carnatic aesthetic */
+  --primary-dark: #6b3410;
+  --danger: #c0392b;
+  --danger-dark: #922b21;
+  --text: #222;
+  --text-light: #666;
+  --sidebar-bg: #2c1a0e;
+  --sidebar-text: #f5deb3;
+  --sidebar-active: #8b4513;
+  --stat-bg: #fff8f2;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 15px;
+  color: var(--text);
+}
+
+body { background: var(--bg); min-height: 100vh; }
+
+/* ── Login ── */
+.login-box {
+  width: 380px;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 2.5rem;
+  box-shadow: 0 4px 24px rgba(0,0,0,.12);
+  margin: auto;
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+}
+.login-box h1 { font-size: 1.6rem; color: var(--primary); margin-bottom: .25rem; }
+.subtitle { color: var(--text-light); margin-bottom: 1.5rem; }
+.login-box label { display: block; margin-bottom: 1rem; font-size: .85rem; font-weight: 600; color: var(--text-light); }
+.login-box input { display: block; width: 100%; padding: .6rem .8rem; border: 1px solid var(--border); border-radius: 6px; font-size: 1rem; margin-top: .3rem; }
+.login-box button { width: 100%; padding: .75rem; background: var(--primary); color: #fff; border: none; border-radius: 6px; font-size: 1rem; cursor: pointer; margin-top: .5rem; }
+.login-box button:hover { background: var(--primary-dark); }
+
+/* ── Layout ── */
+.screen { min-height: 100vh; }
+#app-screen { display: flex; }
+
+/* ── Sidebar ── */
+.sidebar {
+  width: 220px;
+  min-height: 100vh;
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  padding: 1.5rem 0;
+  flex-shrink: 0;
+}
+.logo { padding: 0 1.25rem 1.5rem; border-bottom: 1px solid rgba(255,255,255,.1); }
+.logo-title { display: block; color: var(--sidebar-text); font-size: 1rem; font-weight: 700; }
+.logo-sub { display: block; color: rgba(245,222,179,.5); font-size: .8rem; margin-top: .15rem; }
+nav { flex: 1; padding: 1rem 0; }
+.nav-btn {
+  display: block; width: 100%; text-align: left;
+  padding: .6rem 1.25rem; background: none; border: none;
+  color: rgba(245,222,179,.7); cursor: pointer; font-size: .9rem;
+  border-left: 3px solid transparent; transition: all .15s;
+}
+.nav-btn:hover { color: var(--sidebar-text); background: rgba(255,255,255,.05); }
+.nav-btn.active { color: var(--sidebar-text); border-left-color: var(--primary); background: rgba(139,69,19,.2); }
+.logout-btn {
+  margin: 1rem 1.25rem 0;
+  padding: .5rem; background: rgba(255,255,255,.08);
+  border: 1px solid rgba(255,255,255,.15); border-radius: 6px;
+  color: rgba(245,222,179,.6); cursor: pointer; font-size: .85rem;
+}
+.logout-btn:hover { background: rgba(255,255,255,.15); color: var(--sidebar-text); }
+
+/* ── Content ── */
+.content { flex: 1; padding: 2rem; overflow-y: auto; }
+.section h2 { font-size: 1.5rem; margin-bottom: 1.25rem; color: var(--primary); }
+.section-header { display: flex; align-items: center; gap: 1rem; margin-bottom: 1.25rem; }
+.section-header h2 { margin: 0; }
+
+/* ── Stat cards ── */
+.stat-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1rem; margin-bottom: 1.5rem; }
+.stat-card { background: var(--stat-bg); border: 1px solid var(--border); border-radius: 10px; padding: 1.25rem; text-align: center; }
+.stat-num { display: block; font-size: 2.2rem; font-weight: 700; color: var(--primary); }
+.stat-label { display: block; font-size: .8rem; color: var(--text-light); margin-top: .3rem; }
+
+/* ── Search bar ── */
+.search-bar { display: flex; gap: .5rem; margin-bottom: 1rem; }
+.search-bar input { flex: 1; padding: .55rem .8rem; border: 1px solid var(--border); border-radius: 6px; font-size: .9rem; }
+.search-bar button { padding: .55rem 1rem; background: var(--primary); color: #fff; border: none; border-radius: 6px; cursor: pointer; }
+.search-bar button:hover { background: var(--primary-dark); }
+
+/* ── Table ── */
+.data-table { width: 100%; border-collapse: collapse; background: var(--surface); border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,.07); }
+.data-table th { background: #f0ebe5; text-align: left; padding: .65rem 1rem; font-size: .8rem; color: var(--text-light); text-transform: uppercase; letter-spacing: .04em; }
+.data-table td { padding: .7rem 1rem; border-top: 1px solid var(--border); font-size: .9rem; }
+.data-table tr:hover td { background: #fdf8f4; }
+.action-btn { padding: .3rem .7rem; border: none; border-radius: 5px; cursor: pointer; font-size: .8rem; margin-right: .3rem; }
+.edit-btn { background: #e8f4fd; color: #1a6dad; }
+.edit-btn:hover { background: #cce4f6; }
+.delete-btn { background: #fdecea; color: var(--danger); }
+.delete-btn:hover { background: #f9d6d3; }
+
+/* ── Pagination ── */
+.pagination { display: flex; gap: .5rem; margin-top: 1rem; align-items: center; }
+.pagination button { padding: .4rem .8rem; border: 1px solid var(--border); background: var(--surface); border-radius: 5px; cursor: pointer; }
+.pagination button:disabled { opacity: .4; cursor: default; }
+.pagination span { font-size: .85rem; color: var(--text-light); }
+
+/* ── Buttons ── */
+.btn-primary { padding: .55rem 1.1rem; background: var(--primary); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: .9rem; }
+.btn-primary:hover { background: var(--primary-dark); }
+.btn-danger { padding: .55rem 1.1rem; background: var(--danger); color: #fff; border: none; border-radius: 6px; cursor: pointer; font-size: .9rem; }
+.btn-danger:hover { background: var(--danger-dark); }
+
+/* ── Import ── */
+.import-zone {
+  border: 2px dashed var(--border); border-radius: 10px;
+  padding: 2.5rem; text-align: center; margin: 1rem 0;
+  background: var(--surface);
+}
+.import-zone p { color: var(--text-light); margin-bottom: 1rem; }
+.file-label { cursor: pointer; }
+#import-preview { margin-top: 1rem; }
+#import-result { margin-top: 1rem; }
+
+/* ── Scraper ── */
+.scraper-panel { display: flex; align-items: center; gap: 1.5rem; margin: 1.5rem 0; }
+.scraper-panel-status { font-size: .95rem; }
+.scraper-badge {
+  display: inline-block; background: #fef3cd; color: #856404;
+  border: 1px solid #ffc107; border-radius: 20px;
+  padding: .35rem 1rem; font-size: .85rem; margin-top: .5rem;
+}
+.hint { color: var(--text-light); font-size: .85rem; }
+
+/* ── Sync log ── */
+.log-entry {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: 8px; padding: 1rem 1.25rem; margin-bottom: .75rem;
+}
+.log-type { display: inline-block; padding: .2rem .6rem; border-radius: 4px; font-size: .75rem; font-weight: 600; margin-bottom: .5rem; }
+.log-type-import { background: #e8f5e9; color: #2e7d32; }
+.log-type-scraper { background: #e3f2fd; color: #1565c0; }
+.log-type-scraper_error { background: #fdecea; color: var(--danger); }
+.log-entry pre { font-size: .75rem; background: #f8f8f8; padding: .75rem; border-radius: 6px; overflow-x: auto; margin-top: .5rem; white-space: pre-wrap; }
+
+/* ── Dashboard log ── */
+#dashboard-log .log-entry { padding: .75rem 1rem; }
+
+/* ── Modal ── */
+.modal {
+  position: fixed; inset: 0; background: rgba(0,0,0,.4);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 100;
+}
+.modal-box { background: var(--surface); border-radius: 10px; width: 560px; max-width: 96vw; max-height: 90vh; overflow-y: auto; }
+.modal-header { display: flex; justify-content: space-between; align-items: center; padding: 1.25rem 1.5rem; border-bottom: 1px solid var(--border); }
+.modal-header h3 { color: var(--primary); }
+.modal-close { background: none; border: none; font-size: 1.2rem; cursor: pointer; color: var(--text-light); }
+#modal-fields { padding: 1.25rem 1.5rem; display: flex; flex-direction: column; gap: .9rem; }
+.form-field label { display: block; font-size: .8rem; font-weight: 600; color: var(--text-light); margin-bottom: .3rem; }
+.form-field input, .form-field textarea, .form-field select {
+  width: 100%; padding: .55rem .8rem; border: 1px solid var(--border); border-radius: 6px; font-size: .9rem; font-family: inherit;
+}
+.form-field textarea { resize: vertical; min-height: 80px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: .75rem; padding: 1rem 1.5rem; border-top: 1px solid var(--border); }
+.modal-footer button { padding: .55rem 1.1rem; border-radius: 6px; border: 1px solid var(--border); cursor: pointer; }
+
+/* ── Utilities ── */
+.hidden { display: none !important; }
+.error { color: var(--danger); font-size: .85rem; margin-top: .5rem; }
+.success { color: #2e7d32; font-size: .9rem; }
