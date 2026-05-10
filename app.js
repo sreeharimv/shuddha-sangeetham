@@ -6,10 +6,11 @@
 
 // ── State ──────────────────────────────────────────────────────────────────
 
-let API_URL = '';
-let API_KEY = '';
+const API_URL = 'https://elite-expressed-protocol-mean.trycloudflare.com';
+
+let authToken = localStorage.getItem('ss_admin_token') || '';
 let krithiPage = 1;
-let modalAction = null;  // { method, url, successCb }
+let modalAction = null;
 
 // ── API helper ─────────────────────────────────────────────────────────────
 
@@ -17,39 +18,65 @@ async function api(path, { method = 'GET', body } = {}) {
   const res = await fetch(`${API_URL}${path}`, {
     method,
     headers: {
-      'X-Admin-Key': API_KEY,
+      'Authorization': authToken ? `Bearer ${authToken}` : '',
       'Content-Type': 'application/json',
       'Accept': 'application/json',
     },
     body: body ? JSON.stringify(body) : undefined,
   });
+  if (res.status === 401) {
+    logout();
+    throw new Error('Session expired — please sign in again.');
+  }
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
+}
+
+function logout() {
+  authToken = '';
+  localStorage.removeItem('ss_admin_token');
+  document.getElementById('app-screen').classList.add('hidden');
+  document.getElementById('login-screen').classList.remove('hidden');
 }
 
 // ── Login / logout ─────────────────────────────────────────────────────────
 
 document.getElementById('login-btn').addEventListener('click', async () => {
-  API_URL = document.getElementById('api-url').value.trim().replace(/\/$/, '');
-  API_KEY = document.getElementById('api-key').value.trim();
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
   const errEl = document.getElementById('login-error');
   errEl.classList.add('hidden');
   try {
-    await api('/api/stats');
+    const res = await fetch(`${API_URL}/api/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!res.ok) throw new Error('Invalid username or password.');
+    const data = await res.json();
+    authToken = data.token;
+    localStorage.setItem('ss_admin_token', authToken);
     document.getElementById('login-screen').classList.add('hidden');
     document.getElementById('app-screen').classList.remove('hidden');
     showSection('dashboard');
     loadDashboard();
-  } catch {
-    errEl.textContent = 'Connection failed — check URL and API key.';
+  } catch (e) {
+    errEl.textContent = e.message;
     errEl.classList.remove('hidden');
   }
 });
 
-document.getElementById('logout-btn').addEventListener('click', () => {
-  document.getElementById('app-screen').classList.add('hidden');
-  document.getElementById('login-screen').classList.remove('hidden');
-});
+// Auto-login if token exists
+if (authToken) {
+  api('/api/stats').then(() => {
+    document.getElementById('login-screen').classList.add('hidden');
+    document.getElementById('app-screen').classList.remove('hidden');
+    showSection('dashboard');
+    loadDashboard();
+  }).catch(() => { authToken = ''; localStorage.removeItem('ss_admin_token'); });
+}
+
+document.getElementById('logout-btn').addEventListener('click', logout);
 
 // ── Navigation ─────────────────────────────────────────────────────────────
 

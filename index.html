@@ -11,13 +11,15 @@
     <div class="login-box">
       <h1>Shuddha Sangeetham</h1>
       <p class="subtitle">Admin CMS</p>
-      <label>Backend URL
-        <input id="api-url" type="url" placeholder="http://localhost:8000" />
+      <form id="login-form">
+      <label>Username
+        <input id="login-username" type="text" placeholder="admin" autocomplete="username" />
       </label>
-      <label>API Key
-        <input id="api-key" type="password" placeholder="your admin key" />
+      <label>Password
+        <input id="login-password" type="password" placeholder="••••••••" autocomplete="current-password" />
       </label>
-      <button id="login-btn">Connect</button>
+      <button id="login-btn" type="submit">Sign in</button>
+      </form>
       <p id="login-error" class="error hidden"></p>
     </div>
   </div>
