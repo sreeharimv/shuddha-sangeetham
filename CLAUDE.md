@@ -61,13 +61,21 @@ SearchAlias table seeded with curated spelling variants (Thyagaraja→Tyagaraja,
 | 8 | Settings / Profile screen | ✅ Done |
 | 9 | Delta sync | ✅ Done |
 | 10 | Admin CMS | ✅ Done |
-| 11 | Polish + testing | — |
+| 11 | Polish + testing | ✅ Done |
 
 ## v1 Scope Constraints
 - **No user accounts / auth in v1** — all features work as guest, bookmarks stored locally
 - **No Performance Log UI in v1** — Concert/Artist tables in schema but deferred to v2
 - **English only** — all content in transliterated English; architecture supports future scripts
-- **No delta sync UI yet** — button in Settings (Session 8), service in Session 9
+
+## Pre-submission Checklist (Session 11 complete — pending manual steps)
+- [ ] `dart run flutter_launcher_icons` — generate icon sizes
+- [ ] `dart run flutter_native_splash:create` — generate native splash
+- [ ] Test on low-end Android (2GB RAM) in release mode
+- [ ] Capture screenshots for store listings (see `store_listing/`)
+- [ ] Design feature graphic (1024×500px, brief in `store_listing/play_store_listing.md`)
+- [ ] `flutter build appbundle --release` / `flutter build ipa --release`
+- [ ] Send karnatik.com courtesy email
 
 ## Dependency Rule
 Add all required packages in a single `pubspec.yaml` edit before running `build_runner`.
