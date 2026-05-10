@@ -6,8 +6,7 @@
 
 // ── State ──────────────────────────────────────────────────────────────────
 
-// Backend URL — update this after the Cloudflare tunnel is set up
-const API_URL = 'BACKEND_URL_PLACEHOLDER';
+const API_URL = 'https://elite-expressed-protocol-mean.trycloudflare.com';
 
 let authToken = localStorage.getItem('ss_admin_token') || '';
 let krithiPage = 1;
