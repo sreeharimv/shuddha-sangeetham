@@ -41,7 +41,8 @@ function logout() {
 
 // ── Login / logout ─────────────────────────────────────────────────────────
 
-document.getElementById('login-btn').addEventListener('click', async () => {
+document.getElementById('login-form').addEventListener('submit', async (e) => {
+  e.preventDefault();
   const username = document.getElementById('login-username').value.trim();
   const password = document.getElementById('login-password').value;
   const errEl = document.getElementById('login-error');
@@ -61,7 +62,7 @@ document.getElementById('login-btn').addEventListener('click', async () => {
     showSection('dashboard');
     loadDashboard();
   } catch (e) {
-    errEl.textContent = e.message;
+    errEl.textContent = e.message || 'Login failed — check your credentials.';
     errEl.classList.remove('hidden');
   }
 });
