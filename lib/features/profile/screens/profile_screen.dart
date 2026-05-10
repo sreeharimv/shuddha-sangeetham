@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/text_size_provider.dart';
 import '../../../core/providers/theme_provider.dart';
+import '../../sync/providers/delta_sync_provider.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -269,25 +270,40 @@ class _CheckForUpdatesTile extends ConsumerStatefulWidget {
 }
 
 class _CheckForUpdatesTileState extends ConsumerState<_CheckForUpdatesTile> {
-  bool _checking = false;
-
-  Future<void> _checkForUpdates() async {
-    setState(() => _checking = true);
-    // Stub — delta sync is implemented in Session 9.
-    await Future.delayed(const Duration(seconds: 1));
-    if (!mounted) return;
-    setState(() => _checking = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('You\'re up to date.'),
-        behavior: SnackBarBehavior.floating,
-        duration: Duration(seconds: 2),
-      ),
-    );
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Show snackbar whenever sync completes or errors — runs after each build.
+    ref.listenManual(deltaSyncProvider, (previous, next) {
+      if (!mounted) return;
+      if (next.status == SyncStatus.done) {
+        final msg = next.newCount > 0
+            ? 'Database updated — ${next.newCount} new krithis added.'
+            : 'You\'re up to date.';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(msg),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      } else if (next.status == SyncStatus.error) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not reach the server. Try again later.'),
+            behavior: SnackBarBehavior.floating,
+            duration: Duration(seconds: 3),
+          ),
+        );
+      }
+    });
   }
 
   @override
   Widget build(BuildContext context) {
+    final syncing = ref.watch(
+      deltaSyncProvider.select((s) => s.status == SyncStatus.syncing),
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
       child: Card(
@@ -297,14 +313,16 @@ class _CheckForUpdatesTileState extends ConsumerState<_CheckForUpdatesTile> {
           leading: const Icon(Icons.cloud_sync_outlined),
           title: const Text('Check for updates'),
           subtitle: const Text('Sync the latest krithis from the server'),
-          trailing: _checking
+          trailing: syncing
               ? const SizedBox(
                   width: 20,
                   height: 20,
                   child: CircularProgressIndicator(strokeWidth: 2),
                 )
               : const Icon(Icons.chevron_right),
-          onTap: _checking ? null : _checkForUpdates,
+          onTap: syncing
+              ? null
+              : () => ref.read(deltaSyncProvider.notifier).sync(),
         ),
       ),
     );

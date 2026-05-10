@@ -17,6 +17,12 @@ abstract final class AppConstants {
   static const browsePageSize = 50;
 
   static const karnatikBaseUrl = 'https://www.karnatik.com';
+
+  /// Backend base URL for delta sync. Override via --dart-define=SYNC_BASE_URL=...
+  static const syncBaseUrl = String.fromEnvironment(
+    'SYNC_BASE_URL',
+    defaultValue: 'https://api.shuddhasangeetham.app',
+  );
   static const karnatikAttribution =
       'Content sourced with reference to karnatik.com';
 

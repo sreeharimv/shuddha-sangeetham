@@ -30,6 +30,9 @@ dependencies:
   # URL launcher (karnatik.com links)
   url_launcher: ^6.3.0
 
+  # HTTP client — delta sync API calls
+  http: ^1.2.0
+
   # Icons
   cupertino_icons: ^1.0.8
 
