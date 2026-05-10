@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../core/providers/text_size_provider.dart';
 import '../../../core/theme/app_theme.dart';
 import '../../../data/repositories/krithi_detail_repository.dart';
 import '../providers/krithi_detail_provider.dart';
@@ -253,18 +254,20 @@ class _SectionLabel extends StatelessWidget {
   }
 }
 
-class _LyricsBlock extends StatelessWidget {
+class _LyricsBlock extends ConsumerWidget {
   const _LyricsBlock({required this.text});
 
   final String text;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     final cs = Theme.of(context).colorScheme;
+    final scale = ref.watch(textSizeProvider).scale;
     return Text(
       text.trim(),
       style: AppTextStyles.lyricsStyle.copyWith(
         color: cs.onSurface,
+        fontSize: AppTextStyles.lyricsStyle.fontSize! * scale,
       ),
     );
   }
