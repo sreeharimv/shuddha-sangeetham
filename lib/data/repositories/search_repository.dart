@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:flutter/foundation.dart';
 
 import '../database/app_database.dart';
 import '../models/krithi_search_result.dart';
@@ -27,6 +28,7 @@ class SearchRepository {
   ///
   /// Results are ranked: exact name → starts-with → contains → raga/composer.
   Future<List<KrithiSearchResult>> quickSearch(String query) async {
+    final sw = kDebugMode ? (Stopwatch()..start()) : null;
     final q = _normalize(query);
     if (q.isEmpty) return [];
 
@@ -76,7 +78,11 @@ class SearchRepository {
       ],
     ).get();
 
-    return results.map<KrithiSearchResult>(_rowToResult).toList();
+    final list = results.map<KrithiSearchResult>(_rowToResult).toList();
+    if (kDebugMode && sw != null) {
+      debugPrint('quickSearch("$q") → ${list.length} results in ${sw.elapsedMilliseconds}ms');
+    }
+    return list;
   }
 
   // ---------------------------------------------------------------------------
@@ -86,6 +92,7 @@ class SearchRepository {
   /// Searches across all lyric fields and returns matching krithis with a
   /// short snippet of the matching line for display in the result card.
   Future<List<KrithiSearchResult>> lyricsSearch(String query) async {
+    final sw = kDebugMode ? (Stopwatch()..start()) : null;
     final q = _normalize(query);
     if (q.isEmpty) return [];
 
@@ -128,11 +135,15 @@ class SearchRepository {
       variables: ids.map(Variable.withInt).toList(),
     ).get();
 
-    return results.map<KrithiSearchResult>((row) {
+    final list = results.map<KrithiSearchResult>((row) {
       final base = _rowToResult(row);
       final snippet = row.read<String?>('snippet');
       return base.copyWith(lyricsSnippet: snippet);
     }).toList();
+    if (kDebugMode && sw != null) {
+      debugPrint('lyricsSearch("$q") → ${list.length} results in ${sw.elapsedMilliseconds}ms');
+    }
+    return list;
   }
 
   // ---------------------------------------------------------------------------

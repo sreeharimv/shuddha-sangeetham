@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'core/providers/theme_provider.dart';
@@ -18,6 +19,16 @@ class ShuddhaApp extends ConsumerWidget {
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: themeMode,
+      builder: (context, child) {
+        // Sync status-bar icon brightness with the active theme.
+        final brightness = Theme.of(context).brightness;
+        SystemChrome.setSystemUIOverlayStyle(
+          brightness == Brightness.dark
+              ? SystemUiOverlayStyle.light
+              : SystemUiOverlayStyle.dark,
+        );
+        return child!;
+      },
       home: const MainScreen(),
     );
   }

@@ -1075,7 +1075,8 @@ Full spec: SPEC.md in repo root
 
 Build a simple web-based Admin CMS (separate from the Flutter app):
 - Tech: Simple React or plain HTML/JS — keep it minimal
-- Hosted separately (Railway or Render)
+- Hosted separately on home server accessed through ssh anjaneya
+- Frontend will be accessed using github pages
 - Features:
   - View / add / edit / delete Krithis, Ragas, Composers, Talas
   - Upload scraper JSON output to bulk import krithis

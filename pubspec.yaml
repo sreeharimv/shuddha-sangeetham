@@ -51,6 +51,33 @@ dev_dependencies:
   # Lints
   flutter_lints: ^4.0.0
 
+  # App icon generation — run: dart run flutter_launcher_icons
+  flutter_launcher_icons: ^0.14.1
+
+  # Splash screen generation — run: dart run flutter_native_splash:create
+  flutter_native_splash: ^2.4.0
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: "assets/images/ss_logo.jpg"
+  min_sdk_android: 21
+  adaptive_icon_background: "#00695C"
+  adaptive_icon_foreground: "assets/images/ss_logo.jpg"
+  web:
+    generate: false
+
+flutter_native_splash:
+  color: "#00695C"
+  image: assets/images/ss_logo.jpg
+  color_dark: "#121212"
+  image_dark: assets/images/ss_logo.jpg
+  android: true
+  ios: true
+  android_gravity: center
+  ios_content_mode: center
+  fullscreen: false
+
 flutter:
   uses-material-design: true
 

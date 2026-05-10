@@ -20,75 +20,80 @@ class KrithiResultCard extends StatelessWidget {
     final tt = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 4),
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(12),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Krithi name
-                    Text(
-                      result.name,
-                      style: tt.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w600,
-                        color: cs.onSurface,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    // Raga · Tala
-                    Text(
-                      'Raga: ${result.ragaName}  ·  Tala: ${result.talaName}',
-                      style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 2),
-                    // Composer · Language
-                    Text(
-                      '${result.composerName}  ·  ${result.language}',
-                      style: tt.bodySmall?.copyWith(
-                        color: cs.onSurfaceVariant.withAlpha(180),
-                      ),
-                    ),
-                    // Lyrics snippet — only in lyrics search mode
-                    if (result.lyricsSnippet != null &&
-                        result.lyricsSnippet!.isNotEmpty) ...[
-                      const SizedBox(height: 6),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: cs.primaryContainer.withAlpha(80),
-                          borderRadius: BorderRadius.circular(6),
+    final semanticLabel = '${result.name}, '
+        'Raga ${result.ragaName}, '
+        'Composer ${result.composerName}, '
+        'Tala ${result.talaName}';
+
+    return Semantics(
+      label: semanticLabel,
+      button: true,
+      child: Card(
+        margin: const EdgeInsets.symmetric(vertical: 4),
+        child: InkWell(
+          onTap: onTap,
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 12, 12, 12),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        result.name,
+                        style: tt.titleSmall?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: cs.onSurface,
                         ),
-                        child: Text(
-                          _trimSnippet(result.lyricsSnippet!),
-                          style: tt.bodySmall?.copyWith(
-                            color: cs.onPrimaryContainer,
-                            fontStyle: FontStyle.italic,
-                            height: 1.5,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Raga: ${result.ragaName}  ·  Tala: ${result.talaName}',
+                        style: tt.bodySmall?.copyWith(color: cs.onSurfaceVariant),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${result.composerName}  ·  ${result.language}',
+                        style: tt.bodySmall?.copyWith(
+                          color: cs.onSurfaceVariant.withAlpha(180),
+                        ),
+                      ),
+                      if (result.lyricsSnippet != null &&
+                          result.lyricsSnippet!.isNotEmpty) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: cs.primaryContainer.withAlpha(80),
+                            borderRadius: BorderRadius.circular(6),
                           ),
-                          maxLines: 2,
-                          overflow: TextOverflow.ellipsis,
+                          child: Text(
+                            _trimSnippet(result.lyricsSnippet!),
+                            style: tt.bodySmall?.copyWith(
+                              color: cs.onPrimaryContainer,
+                              fontStyle: FontStyle.italic,
+                              height: 1.5,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
+                      ],
                     ],
-                  ],
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Icon(
-                Icons.chevron_right,
-                color: cs.onSurfaceVariant.withAlpha(120),
-                size: 20,
-              ),
-            ],
+                const SizedBox(width: 8),
+                Icon(
+                  Icons.chevron_right,
+                  color: cs.onSurfaceVariant.withAlpha(120),
+                  size: 20,
+                ),
+              ],
+            ),
           ),
         ),
       ),
