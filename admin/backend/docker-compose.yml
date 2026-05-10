@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  ss-admin:
+    build: .
+    container_name: ss-admin
+    restart: always
+    ports:
+      - "127.0.0.1:8001:8001"
+    volumes:
+      - /home/sreeh007/shuddha-sangeetham/scraper/data:/data
+      - /home/sreeh007/shuddha-sangeetham/scraper:/scraper
+    env_file:
+      - .env
