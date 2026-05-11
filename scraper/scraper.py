@@ -94,6 +94,7 @@ _COMPOSER_RE = re.compile(r"Composer\s*:", re.I)
 _LANGUAGE_RE = re.compile(r"Language\s*:", re.I)
 _AROHANA_RE = re.compile(r"Aa\s*:", re.I)
 _AVAROHANA_RE = re.compile(r"Av\s*:", re.I)
+_DEITY_RE = re.compile(r"God\s*:", re.I)
 
 
 def _get_content_td(soup: BeautifulSoup):
@@ -160,6 +161,7 @@ def parse_krithi_page(html: str, page_id: int) -> dict | None:
     tala = ""
     composer = ""
     language = ""
+    deity = ""
     pallavi_parts: list[str] = []
     anupallavi_parts: list[str] = []
     charanam_parts: list[str] = []
@@ -244,6 +246,9 @@ def parse_krithi_page(html: str, page_id: int) -> dict | None:
             if _LANGUAGE_RE.search(p_text):
                 raw = re.split(r"Language\s*:", p_text, flags=re.I)[-1]
                 language = re.split(r"Click\s+to\s+view", raw, flags=re.I)[0].strip()
+            if _DEITY_RE.search(p_text):
+                raw = re.split(r"God\s*:", p_text, flags=re.I)[-1]
+                deity = re.split(r"(?:taaLam|Composer|Language|Click)\s*[:\s]", raw, flags=re.I)[0].strip()
             continue
 
         # ---- Lyric content --------------------------------------------------
@@ -336,6 +341,7 @@ def parse_krithi_page(html: str, page_id: int) -> dict | None:
         "composer": composer,
         "language": language,
         "composition_type": composition_type,
+        "deity": deity,
         "pallavi": pallavi,
         "anupallavi": anupallavi,
         "charanam": charanam,

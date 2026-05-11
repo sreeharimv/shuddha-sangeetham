@@ -30,6 +30,9 @@ class Krithis extends Table {
   /// krithi | varnam | geetam | swarajati | other
   TextColumn get compositionType => text()();
 
+  /// Deity associated with the composition (nullable).
+  TextColumn get deity => text().nullable()();
+
   /// Opening section of the lyrics (always present).
   TextColumn get pallavi => text()();
 

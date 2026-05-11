@@ -45,6 +45,7 @@ def migrate():
         ("ragas",     "characteristics",            "TEXT"),
         ("talas",     "structure",                  "TEXT"),
         ("talas",     "aksharas_count",             "INTEGER"),
+        ("krithis",   "deity",                      "TEXT"),
     ]
     for table, col, col_type in optional_columns:
         try:

@@ -13,6 +13,7 @@ class KrithiDetail {
     required this.language,
     required this.compositionType,
     required this.pallavi,
+    this.deity,
     this.anupallavi,
     this.charanam,
     this.sourceUrl,
@@ -25,6 +26,7 @@ class KrithiDetail {
   final String talaName;
   final String language;
   final String compositionType;
+  final String? deity;
   final String pallavi;
   final String? anupallavi;
   final String? charanam;
@@ -44,7 +46,7 @@ class KrithiDetailRepository {
         c.name  AS composer_name,
         r.name  AS raga_name,
         t.name  AS tala_name,
-        k.language, k.composition_type,
+        k.language, k.composition_type, k.deity,
         k.pallavi, k.anupallavi, k.charanam, k.source_url
       FROM krithis k
       JOIN composers c ON c.id = k.composer_id
@@ -66,6 +68,7 @@ class KrithiDetailRepository {
       talaName: row.read<String>('tala_name'),
       language: row.read<String>('language'),
       compositionType: row.read<String>('composition_type'),
+      deity: row.readNullable<String>('deity'),
       pallavi: row.read<String>('pallavi'),
       anupallavi: row.readNullable<String>('anupallavi'),
       charanam: row.readNullable<String>('charanam'),

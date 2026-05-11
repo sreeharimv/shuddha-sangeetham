@@ -19,6 +19,8 @@ import sys
 import unicodedata
 from pathlib import Path
 
+from import_json import merge_into_raw
+
 # ---------------------------------------------------------------------------
 # Logging
 # ---------------------------------------------------------------------------
@@ -191,6 +193,7 @@ CREATE TABLE IF NOT EXISTS krithis (
     tala_id         INTEGER REFERENCES talas(id),
     language        TEXT NOT NULL DEFAULT 'other',
     composition_type TEXT NOT NULL DEFAULT 'krithi',
+    deity           TEXT NOT NULL DEFAULT '',
     pallavi         TEXT NOT NULL DEFAULT '',
     anupallavi      TEXT NOT NULL DEFAULT '',
     charanam        TEXT NOT NULL DEFAULT '',
@@ -386,8 +389,8 @@ def build_db(rows: list[dict], db_path: Path) -> None:
                 """
                 INSERT INTO krithis
                     (name, search_tokens, composer_id, raga_id, tala_id,
-                     language, composition_type, pallavi, anupallavi, charanam, source_url)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                     language, composition_type, deity, pallavi, anupallavi, charanam, source_url)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     row.get("name", ""),
@@ -397,6 +400,7 @@ def build_db(rows: list[dict], db_path: Path) -> None:
                     tala_id,
                     row.get("language", "other"),
                     row.get("composition_type", "krithi"),
+                    row.get("deity", ""),
                     row.get("pallavi", ""),
                     row.get("anupallavi", ""),
                     row.get("charanam", ""),
@@ -446,6 +450,8 @@ def main() -> None:
                         help="Output SQLite path (default: data/shuddha.db)")
     parser.add_argument("--sample", type=Path, default=Path(__file__).parent / "data" / "sample.json",
                         help="Output sample JSON path (default: data/sample.json)")
+    parser.add_argument("--enrichment", type=Path, default=Path(__file__).parent / "data" / "enrichment.json",
+                        help="Enrichment JSON from import_json.py (optional, default: data/enrichment.json)")
     args = parser.parse_args()
 
     rows = load_raw(args.raw)
@@ -453,6 +459,14 @@ def main() -> None:
         log.error("No raw JSON files found in %s — run scraper.py first.", args.raw)
         sys.exit(1)
 
+    enrichment: dict = {}
+    if args.enrichment.exists():
+        enrichment = json.loads(args.enrichment.read_text(encoding="utf-8"))
+        log.info("Loaded enrichment map with %d entries from %s", len(enrichment), args.enrichment)
+    else:
+        log.info("No enrichment file found at %s — skipping JSON enrichment", args.enrichment)
+
+    rows = [merge_into_raw(r, enrichment) for r in rows]
     rows = [normalise_row(r) for r in rows]
     rows = deduplicate(rows)
     export_sample_json(rows, args.sample)

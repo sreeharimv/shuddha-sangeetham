@@ -98,6 +98,8 @@ class _KrithiDetailBody extends StatelessWidget {
                     label: 'Type',
                     value: _titleCase(detail.compositionType),
                   ),
+                  if (detail.deity != null && detail.deity!.trim().isNotEmpty)
+                    _MetaRow(label: 'Deity', value: detail.deity!),
                 ],
               ),
             ),

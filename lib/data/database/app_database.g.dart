@@ -1538,6 +1538,11 @@ class $KrithisTable extends Krithis with TableInfo<$KrithisTable, Krithi> {
   late final GeneratedColumn<String> compositionType = GeneratedColumn<String>(
       'composition_type', aliasedName, false,
       type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _deityMeta = const VerificationMeta('deity');
+  @override
+  late final GeneratedColumn<String> deity = GeneratedColumn<String>(
+      'deity', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   static const VerificationMeta _pallaviMeta =
       const VerificationMeta('pallavi');
   @override
@@ -1588,6 +1593,7 @@ class $KrithisTable extends Krithis with TableInfo<$KrithisTable, Krithi> {
         talaId,
         language,
         compositionType,
+        deity,
         pallavi,
         anupallavi,
         charanam,
@@ -1654,6 +1660,10 @@ class $KrithisTable extends Krithis with TableInfo<$KrithisTable, Krithi> {
     } else if (isInserting) {
       context.missing(_compositionTypeMeta);
     }
+    if (data.containsKey('deity')) {
+      context.handle(
+          _deityMeta, deity.isAcceptableOrUnknown(data['deity']!, _deityMeta));
+    }
     if (data.containsKey('pallavi')) {
       context.handle(_pallaviMeta,
           pallavi.isAcceptableOrUnknown(data['pallavi']!, _pallaviMeta));
@@ -1707,6 +1717,8 @@ class $KrithisTable extends Krithis with TableInfo<$KrithisTable, Krithi> {
           .read(DriftSqlType.string, data['${effectivePrefix}language'])!,
       compositionType: attachedDatabase.typeMapping.read(
           DriftSqlType.string, data['${effectivePrefix}composition_type'])!,
+      deity: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}deity']),
       pallavi: attachedDatabase.typeMapping
           .read(DriftSqlType.string, data['${effectivePrefix}pallavi'])!,
       anupallavi: attachedDatabase.typeMapping
@@ -1747,6 +1759,9 @@ class Krithi extends DataClass implements Insertable<Krithi> {
   /// krithi | varnam | geetam | swarajati | other
   final String compositionType;
 
+  /// Deity associated with the composition (nullable).
+  final String? deity;
+
   /// Opening section of the lyrics (always present).
   final String pallavi;
 
@@ -1770,6 +1785,7 @@ class Krithi extends DataClass implements Insertable<Krithi> {
       required this.talaId,
       required this.language,
       required this.compositionType,
+      this.deity,
       required this.pallavi,
       this.anupallavi,
       this.charanam,
@@ -1789,6 +1805,9 @@ class Krithi extends DataClass implements Insertable<Krithi> {
     map['tala_id'] = Variable<int>(talaId);
     map['language'] = Variable<String>(language);
     map['composition_type'] = Variable<String>(compositionType);
+    if (!nullToAbsent || deity != null) {
+      map['deity'] = Variable<String>(deity);
+    }
     map['pallavi'] = Variable<String>(pallavi);
     if (!nullToAbsent || anupallavi != null) {
       map['anupallavi'] = Variable<String>(anupallavi);
@@ -1816,6 +1835,8 @@ class Krithi extends DataClass implements Insertable<Krithi> {
       talaId: Value(talaId),
       language: Value(language),
       compositionType: Value(compositionType),
+      deity:
+          deity == null && nullToAbsent ? const Value.absent() : Value(deity),
       pallavi: Value(pallavi),
       anupallavi: anupallavi == null && nullToAbsent
           ? const Value.absent()
@@ -1843,6 +1864,7 @@ class Krithi extends DataClass implements Insertable<Krithi> {
       talaId: serializer.fromJson<int>(json['talaId']),
       language: serializer.fromJson<String>(json['language']),
       compositionType: serializer.fromJson<String>(json['compositionType']),
+      deity: serializer.fromJson<String?>(json['deity']),
       pallavi: serializer.fromJson<String>(json['pallavi']),
       anupallavi: serializer.fromJson<String?>(json['anupallavi']),
       charanam: serializer.fromJson<String?>(json['charanam']),
@@ -1863,6 +1885,7 @@ class Krithi extends DataClass implements Insertable<Krithi> {
       'talaId': serializer.toJson<int>(talaId),
       'language': serializer.toJson<String>(language),
       'compositionType': serializer.toJson<String>(compositionType),
+      'deity': serializer.toJson<String?>(deity),
       'pallavi': serializer.toJson<String>(pallavi),
       'anupallavi': serializer.toJson<String?>(anupallavi),
       'charanam': serializer.toJson<String?>(charanam),
@@ -1881,6 +1904,7 @@ class Krithi extends DataClass implements Insertable<Krithi> {
           int? talaId,
           String? language,
           String? compositionType,
+          Value<String?> deity = const Value.absent(),
           String? pallavi,
           Value<String?> anupallavi = const Value.absent(),
           Value<String?> charanam = const Value.absent(),
@@ -1897,6 +1921,7 @@ class Krithi extends DataClass implements Insertable<Krithi> {
         talaId: talaId ?? this.talaId,
         language: language ?? this.language,
         compositionType: compositionType ?? this.compositionType,
+        deity: deity.present ? deity.value : this.deity,
         pallavi: pallavi ?? this.pallavi,
         anupallavi: anupallavi.present ? anupallavi.value : this.anupallavi,
         charanam: charanam.present ? charanam.value : this.charanam,
@@ -1919,6 +1944,7 @@ class Krithi extends DataClass implements Insertable<Krithi> {
       compositionType: data.compositionType.present
           ? data.compositionType.value
           : this.compositionType,
+      deity: data.deity.present ? data.deity.value : this.deity,
       pallavi: data.pallavi.present ? data.pallavi.value : this.pallavi,
       anupallavi:
           data.anupallavi.present ? data.anupallavi.value : this.anupallavi,
@@ -1940,6 +1966,7 @@ class Krithi extends DataClass implements Insertable<Krithi> {
           ..write('talaId: $talaId, ')
           ..write('language: $language, ')
           ..write('compositionType: $compositionType, ')
+          ..write('deity: $deity, ')
           ..write('pallavi: $pallavi, ')
           ..write('anupallavi: $anupallavi, ')
           ..write('charanam: $charanam, ')
@@ -1960,6 +1987,7 @@ class Krithi extends DataClass implements Insertable<Krithi> {
       talaId,
       language,
       compositionType,
+      deity,
       pallavi,
       anupallavi,
       charanam,
@@ -1978,6 +2006,7 @@ class Krithi extends DataClass implements Insertable<Krithi> {
           other.talaId == this.talaId &&
           other.language == this.language &&
           other.compositionType == this.compositionType &&
+          other.deity == this.deity &&
           other.pallavi == this.pallavi &&
           other.anupallavi == this.anupallavi &&
           other.charanam == this.charanam &&
@@ -1995,6 +2024,7 @@ class KrithisCompanion extends UpdateCompanion<Krithi> {
   final Value<int> talaId;
   final Value<String> language;
   final Value<String> compositionType;
+  final Value<String?> deity;
   final Value<String> pallavi;
   final Value<String?> anupallavi;
   final Value<String?> charanam;
@@ -2010,6 +2040,7 @@ class KrithisCompanion extends UpdateCompanion<Krithi> {
     this.talaId = const Value.absent(),
     this.language = const Value.absent(),
     this.compositionType = const Value.absent(),
+    this.deity = const Value.absent(),
     this.pallavi = const Value.absent(),
     this.anupallavi = const Value.absent(),
     this.charanam = const Value.absent(),
@@ -2026,6 +2057,7 @@ class KrithisCompanion extends UpdateCompanion<Krithi> {
     required int talaId,
     required String language,
     required String compositionType,
+    this.deity = const Value.absent(),
     required String pallavi,
     this.anupallavi = const Value.absent(),
     this.charanam = const Value.absent(),
@@ -2048,6 +2080,7 @@ class KrithisCompanion extends UpdateCompanion<Krithi> {
     Expression<int>? talaId,
     Expression<String>? language,
     Expression<String>? compositionType,
+    Expression<String>? deity,
     Expression<String>? pallavi,
     Expression<String>? anupallavi,
     Expression<String>? charanam,
@@ -2064,6 +2097,7 @@ class KrithisCompanion extends UpdateCompanion<Krithi> {
       if (talaId != null) 'tala_id': talaId,
       if (language != null) 'language': language,
       if (compositionType != null) 'composition_type': compositionType,
+      if (deity != null) 'deity': deity,
       if (pallavi != null) 'pallavi': pallavi,
       if (anupallavi != null) 'anupallavi': anupallavi,
       if (charanam != null) 'charanam': charanam,
@@ -2082,6 +2116,7 @@ class KrithisCompanion extends UpdateCompanion<Krithi> {
       Value<int>? talaId,
       Value<String>? language,
       Value<String>? compositionType,
+      Value<String?>? deity,
       Value<String>? pallavi,
       Value<String?>? anupallavi,
       Value<String?>? charanam,
@@ -2097,6 +2132,7 @@ class KrithisCompanion extends UpdateCompanion<Krithi> {
       talaId: talaId ?? this.talaId,
       language: language ?? this.language,
       compositionType: compositionType ?? this.compositionType,
+      deity: deity ?? this.deity,
       pallavi: pallavi ?? this.pallavi,
       anupallavi: anupallavi ?? this.anupallavi,
       charanam: charanam ?? this.charanam,
@@ -2133,6 +2169,9 @@ class KrithisCompanion extends UpdateCompanion<Krithi> {
     if (compositionType.present) {
       map['composition_type'] = Variable<String>(compositionType.value);
     }
+    if (deity.present) {
+      map['deity'] = Variable<String>(deity.value);
+    }
     if (pallavi.present) {
       map['pallavi'] = Variable<String>(pallavi.value);
     }
@@ -2165,6 +2204,7 @@ class KrithisCompanion extends UpdateCompanion<Krithi> {
           ..write('talaId: $talaId, ')
           ..write('language: $language, ')
           ..write('compositionType: $compositionType, ')
+          ..write('deity: $deity, ')
           ..write('pallavi: $pallavi, ')
           ..write('anupallavi: $anupallavi, ')
           ..write('charanam: $charanam, ')
