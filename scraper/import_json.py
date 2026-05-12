@@ -42,7 +42,9 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 DEFAULT_SONG_DIR = Path(__file__).parent / "data" / "json" / "song"
+DEFAULT_COMPOSER_DIR = Path(__file__).parent / "data" / "json" / "composer"
 DEFAULT_OUT = Path(__file__).parent / "data" / "enrichment.json"
+DEFAULT_COMPOSER_OUT = Path(__file__).parent / "data" / "composer_era.json"
 
 _KARNATIK_URL_RE = re.compile(r"https?://(?:www\.)?karnatik\.com/c\d+\.shtml", re.I)
 
@@ -95,8 +97,8 @@ def parse_song(data: dict) -> dict | None:
     if not karnatik_url:
         return None
 
-    # Normalize URL: ensure www prefix and consistent casing
-    karnatik_url = re.sub(r"https?://karnatik", "https://www.karnatik", karnatik_url, flags=re.I)
+    # Normalize URL: force https:// and ensure www prefix
+    karnatik_url = re.sub(r"https?://(www\.)?karnatik", "https://www.karnatik", karnatik_url, flags=re.I)
 
     deity_raw = _info_value(info, "God")
     tala_angas = _info_value(info, "Tala angas")
@@ -157,6 +159,44 @@ def build_enrichment_map(song_dir: Path) -> dict[str, dict]:
     return enrichment
 
 
+def build_composer_era_map(composer_dir: Path) -> dict[str, str]:
+    """
+    Walk all JSON files in composer_dir and return a dict keyed by composer
+    display name (title.H) mapping to era string "YYYY–YYYY" or "YYYY–".
+    Only composers with at least a Born year are included.
+    """
+    era_map: dict[str, str] = {}
+    total = 0
+    matched = 0
+
+    for f in sorted(composer_dir.glob("*.json")):
+        total += 1
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+        except Exception as exc:
+            log.warning("Could not read %s: %s", f, exc)
+            continue
+
+        name = data.get("title", {}).get("H", "").strip()
+        if not name:
+            continue
+
+        info = data.get("info", [])
+        born = _info_value(info, "Born")
+        died = _info_value(info, "Died")
+
+        if born:
+            era = f"{born}–{died}" if died else f"{born}–"
+            era_map[name] = era
+            matched += 1
+
+    log.info(
+        "Processed %d composer files: %d with era data",
+        total, matched,
+    )
+    return era_map
+
+
 def merge_into_raw(raw_row: dict, enrichment: dict[str, dict]) -> dict:
     """
     Merge enrichment fields into a single raw scraper row (in-place copy).
@@ -191,8 +231,16 @@ def main() -> None:
         help=f"Directory of GitHub JSON song files (default: {DEFAULT_SONG_DIR})",
     )
     parser.add_argument(
+        "--composers", type=Path, default=DEFAULT_COMPOSER_DIR,
+        help=f"Directory of GitHub JSON composer files (default: {DEFAULT_COMPOSER_DIR})",
+    )
+    parser.add_argument(
         "--out", type=Path, default=DEFAULT_OUT,
         help=f"Output enrichment JSON path (default: {DEFAULT_OUT})",
+    )
+    parser.add_argument(
+        "--composer-out", type=Path, default=DEFAULT_COMPOSER_OUT,
+        help=f"Output composer era JSON path (default: {DEFAULT_COMPOSER_OUT})",
     )
     args = parser.parse_args()
 
@@ -205,12 +253,21 @@ def main() -> None:
         sys.exit(1)
 
     enrichment = build_enrichment_map(args.songs)
-
     args.out.parent.mkdir(parents=True, exist_ok=True)
     args.out.write_text(
         json.dumps(enrichment, ensure_ascii=False, indent=2), encoding="utf-8"
     )
     log.info("Enrichment map written to %s (%d entries)", args.out, len(enrichment))
+
+    if args.composers.exists():
+        era_map = build_composer_era_map(args.composers)
+        args.composer_out.parent.mkdir(parents=True, exist_ok=True)
+        args.composer_out.write_text(
+            json.dumps(era_map, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        log.info("Composer era map written to %s (%d entries)", args.composer_out, len(era_map))
+    else:
+        log.info("Composer directory not found at %s — skipping era map", args.composers)
 
 
 if __name__ == "__main__":

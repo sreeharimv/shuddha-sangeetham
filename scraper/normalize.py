@@ -167,7 +167,8 @@ PRAGMA foreign_keys=ON;
 CREATE TABLE IF NOT EXISTS composers (
     id              INTEGER PRIMARY KEY,
     name            TEXT NOT NULL UNIQUE,
-    name_variants   TEXT NOT NULL DEFAULT '[]'
+    name_variants   TEXT NOT NULL DEFAULT '[]',
+    era             TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS ragas (
@@ -181,7 +182,9 @@ CREATE TABLE IF NOT EXISTS ragas (
 CREATE TABLE IF NOT EXISTS talas (
     id              INTEGER PRIMARY KEY,
     name            TEXT NOT NULL UNIQUE,
-    name_variants   TEXT NOT NULL DEFAULT '[]'
+    name_variants   TEXT NOT NULL DEFAULT '[]',
+    tala_angas      TEXT NOT NULL DEFAULT '',
+    tala_count      TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS krithis (
@@ -343,7 +346,7 @@ def build_search_tokens(row: dict, raga_name: str, composer_name: str, tala_name
     return " ".join(p for p in parts if p)
 
 
-def build_db(rows: list[dict], db_path: Path) -> None:
+def build_db(rows: list[dict], db_path: Path, composer_era: dict[str, str] | None = None) -> None:
     db_path.parent.mkdir(parents=True, exist_ok=True)
     if db_path.exists():
         db_path.unlink()
@@ -376,11 +379,15 @@ def build_db(rows: list[dict], db_path: Path) -> None:
                 "arohana": arohana,
                 "avarohana": avarohana,
             })
+            composer_era_val = (composer_era or {}).get(composer_name, "")
             composer_id = _get_or_create(cur, "composers", composer_name, {
                 "name_variants": composer_variants,
+                "era": composer_era_val,
             })
             tala_id = _get_or_create(cur, "talas", tala_name, {
                 "name_variants": tala_variants,
+                "tala_angas": row.get("tala_angas", ""),
+                "tala_count": row.get("tala_count", ""),
             })
 
             search_tokens = build_search_tokens(row, raga_name, composer_name, tala_name)
@@ -452,6 +459,8 @@ def main() -> None:
                         help="Output sample JSON path (default: data/sample.json)")
     parser.add_argument("--enrichment", type=Path, default=Path(__file__).parent / "data" / "enrichment.json",
                         help="Enrichment JSON from import_json.py (optional, default: data/enrichment.json)")
+    parser.add_argument("--composer-era", type=Path, default=Path(__file__).parent / "data" / "composer_era.json",
+                        help="Composer era JSON from import_json.py (optional, default: data/composer_era.json)")
     args = parser.parse_args()
 
     rows = load_raw(args.raw)
@@ -466,11 +475,18 @@ def main() -> None:
     else:
         log.info("No enrichment file found at %s — skipping JSON enrichment", args.enrichment)
 
+    composer_era: dict = {}
+    if args.composer_era.exists():
+        composer_era = json.loads(args.composer_era.read_text(encoding="utf-8"))
+        log.info("Loaded composer era map with %d entries from %s", len(composer_era), args.composer_era)
+    else:
+        log.info("No composer era file found at %s — skipping era enrichment", args.composer_era)
+
     rows = [merge_into_raw(r, enrichment) for r in rows]
     rows = [normalise_row(r) for r in rows]
     rows = deduplicate(rows)
     export_sample_json(rows, args.sample)
-    build_db(rows, args.out)
+    build_db(rows, args.out, composer_era)
 
 
 if __name__ == "__main__":
