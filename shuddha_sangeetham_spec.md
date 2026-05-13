@@ -223,9 +223,11 @@ See Section 14 (Future Scope) for the full v2 feature description.
 
 ## 7. Data Source
 
-### 7.1 Source — karnatik.com
+### 7.1 Sources — Hybrid Pipeline
 
-**Single authoritative source.** [karnatik.com](https://www.karnatik.com) is a 30-year-old Carnatic music reference with 20,000+ krithis and full lyrics, maintained by a passionate individual contributor (rani) since 1995.
+**Primary source: karnatik.com.** [karnatik.com](https://www.karnatik.com) is a 30-year-old Carnatic music reference with 20,000+ krithis and full lyrics in plain-English transliteration (the form rasikas actually use), maintained by a passionate individual contributor (rani) since 1995.
+
+**Supplementary source: `ramanarunachalam/Music` (GitHub JSON).** Contains 12,009 song records with richer structured metadata (deity, tala angas, tala count). Lyrics in this dataset are in SLP1 academic diacritics — not plain English — so they are used **only** for metadata enrichment of records already scraped from karnatik.com. Matching is done via the karnatik.com URL embedded in the JSON. Records with no karnatik.com match are discarded.
 
 **Why this is legally clean:**
 - Krithi names, raga names, composer names, tala names → **facts, not copyrightable**
@@ -329,6 +331,7 @@ Krithi
   - tala_id → Tala
   - language                 (telugu | sanskrit | tamil | kannada | other)
   - composition_type         (krithi | varnam | geetam | swarajati | other)
+  - deity                    (deity associated with the composition, nullable)
   - pallavi
   - anupallavi               (nullable)
   - charanam                 (nullable — full text, may contain multiple charanams)
@@ -448,8 +451,8 @@ Bottom Navigation Bar (4 tabs)
 
 Krithi Detail Page
 │
-├── Header: Name · Composer · Raga · Tala · Language · Type
-├── [ 🔖 Bookmark ]  [ View on karnatik.com ↗ ]
+├── Header: Name · Composer · Raga · Tala · Language · Type · Deity (if present)
+├── [ 🔖 Bookmark ]
 ├── Lyrics
 │       ├── Pallavi
 │       ├── Anupallavi (if present)
@@ -839,32 +842,60 @@ Min SDK: Android 5.0 (API 21), iOS 13
 
 ---
 
-### Session 2 — Python Scraper
-**Spec sections to include:** Section 7.1 (Data Source), Section 7.2 (Data Pipeline), Section 8 (Data Models)
+### Session 2 — Python Scraper + Hybrid Data Pipeline
 
-**Prompt:**
+**Status: ✅ Done (reworked — see notes below)**
+
+**Spec sections:** Section 7.1 (Data Source), Section 7.2 (Data Pipeline), Section 8 (Data Models)
+
+#### Data Sources
+
+**Primary — karnatik.com scraper (`scraper.py`)**
+
+karnatik.com is the authoritative source for lyrics in familiar plain-English transliteration (e.g. "Bantureethi koluvi"). Scrapes pages `c1000.shtml` → `c20000.shtml` (~20,000 krithis). Extracts per page:
+
+- krithi name, raga (with arohana/avarohana), tala, composer, language, composition type
+- pallavi, anupallavi, charanam(s)
+- deity (from the "God" field on the page — stored as `deity`)
+
+Features: polite 2–3.5 s rate limit, resumable (picks up from last scraped ID), `failed.log` for retries. Output: one JSON file per batch in `scraper/data/raw/`.
+
+**Supplementary — GitHub JSON importer (`import_json.py`)**
+
+`ramanarunachalam/Music` on GitHub contains 12,009 song records with richer structured metadata. The lyrics are in SLP1 diacritics (academic notation), **not** plain English — so they are not used for app lyrics. The JSON enriches karnatik.com records with:
+
+- `deity` — when karnatik.com page omits it
+- `tala_angas` — detailed tala structure (e.g. "Laghu-1, Dhruta-2")
+- `tala_count` — beat count string (e.g. "4 + 2 + 2 = 8")
+- `raga_arohana` / `raga_avarohana` — fallback when scraper misses them
+
+Matching strategy: join on karnatik.com URL embedded in the JSON `lyricsref` field. Unmatched JSON records (no karnatik.com link) are **discarded** — we do not add lyrics-less records.
+
+#### Pipeline
+
 ```
-App: Shuddha Sangeetham
-Package ID: com.shuddhasangeetham.app
-Framework: Flutter + drift (SQLite) + Riverpod
-Repo: github.com/[yourname]/shuddha-sangeetham
-Full spec: SPEC.md in repo root
-
-Build a Python scraper for karnatik.com:
-- Scrape pages c1000.shtml through c20000.shtml sequentially
-- Rate limit: 1 request per 2-3 seconds (polite, no server impact)
-- Extract per page: krithi name, raga (with arohana/avarohana), tala,
-  composer, language, composition type, pallavi, anupallavi, charanam(s)
-- Skip translations/meanings — not needed
-- Output: clean JSON file, one object per krithi
-- Handle errors gracefully — log failed pages, continue scraping
-- Resumable — if interrupted, pick up from where it left off
-- Separate script to normalize output: deduplicate, normalize
-  raga/composer/tala names, generate SearchAlias variants
-- Final output: SQLite database ready to bundle with the Flutter app
+scraper.py          → scraper/data/raw/*.json     (karnatik.com HTML → JSON)
+import_json.py      → scraper/data/json_enriched/ (GitHub JSON → enrichment dict keyed by karnatik URL)
+normalize.py        → scraper/data/shuddha.db     (merge + deduplicate + FTS5)
+migrate_db.py       → assets/db/shuddha_sangeetham.db  (Drift-compatible schema, indexes, FTS5 rebuild)
 ```
 
-**Expected output:** `scraper.py`, `normalize.py`, sample output JSON, final SQLite DB.
+#### Schema additions (vs original Session 2)
+
+- `krithis.deity TEXT` — deity/god associated with the composition
+- `talas.structure TEXT` — tala angas string (from JSON enrichment)
+- `talas.aksharas_count INTEGER` — beat count (from JSON enrichment)
+
+#### Scripts
+
+| Script | Role |
+|---|---|
+| `scraper.py` | karnatik.com HTML scraper — primary source |
+| `import_json.py` | GitHub JSON enrichment importer |
+| `normalize.py` | Merge, deduplicate, normalise names, build `shuddha.db` |
+| `migrate_db.py` | Upgrade to Drift-compatible schema, rebuild FTS5, copy to `assets/db/` |
+
+**Expected output:** `scraper.py`, `import_json.py`, `normalize.py`, `migrate_db.py`, sample raw JSON, final `assets/db/shuddha_sangeetham.db`.
 
 ---
 
@@ -965,9 +996,9 @@ Repo: github.com/[yourname]/shuddha-sangeetham
 Full spec: SPEC.md in repo root
 
 Build the Krithi Detail Page:
-- Header: krithi name, composer, raga, tala, language, composition type
+- Header metadata chips: krithi name, composer, raga, tala, language, composition type,
+  deity (hidden if empty)
 - Bookmark button (top right) — saves to local DB
-- "View on karnatik.com" link (opens in browser)
 - Lyrics section:
   - Pallavi (labelled)
   - Anupallavi (labelled, hidden if empty)
