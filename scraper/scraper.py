@@ -425,7 +425,20 @@ def append_failed(page_id: int) -> None:
         f.write(f"{page_id}\n")
 
 
-def scrape(start: int, end: int, retry_failed: bool = False) -> None:
+def load_empty_raga() -> list[int]:
+    """Return sorted list of page IDs whose saved raw JSON has an empty raga."""
+    empty = []
+    for f in RAW_DIR.glob("*.json"):
+        try:
+            data = json.loads(f.read_text(encoding="utf-8"))
+            if not (data.get("raga") or "").strip():
+                empty.append(int(f.stem))
+        except Exception:
+            pass
+    return sorted(empty)
+
+
+def scrape(start: int, end: int, retry_failed: bool = False, missing_raga_only: bool = False) -> None:
     RAW_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -440,6 +453,12 @@ def scrape(start: int, end: int, retry_failed: bool = False) -> None:
         log.info("Retrying %d previously failed pages", len(ids_to_scrape))
         # Clear the failed log so we start fresh
         FAILED_LOG.write_text("")
+    elif missing_raga_only:
+        ids_to_scrape = [pid for pid in load_empty_raga() if start <= pid <= end]
+        log.info(
+            "Scraping %d pages with missing ragas between %d and %d",
+            len(ids_to_scrape), start, end,
+        )
     else:
         ids_to_scrape = [n for n in range(start, end + 1) if n not in already_scraped]
         log.info(
@@ -498,6 +517,11 @@ def main() -> None:
         action="store_true",
         help="Re-attempt all pages listed in data/failed.log instead of the range",
     )
+    parser.add_argument(
+        "--missing-raga",
+        action="store_true",
+        help="Re-scrape only pages whose saved raw JSON has an empty raga",
+    )
     args = parser.parse_args()
 
     # Ensure log handler path is correct now that DATA_DIR may have been created
@@ -508,7 +532,7 @@ def main() -> None:
             log.removeHandler(handler)
     log.addHandler(logging.FileHandler(DATA_DIR / "scraper.log"))
 
-    scrape(args.start, args.end, retry_failed=args.retry_failed)
+    scrape(args.start, args.end, retry_failed=args.retry_failed, missing_raga_only=args.missing_raga)
 
 
 if __name__ == "__main__":
