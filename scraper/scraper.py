@@ -235,20 +235,20 @@ def parse_krithi_page(html: str, page_id: int) -> dict | None:
             # P[3]: taaLam / Composer / Language (all in one <p>)
             if _TAALAM_RE.search(p_text):
                 tala = re.split(r"taaLam\s*:", p_text, flags=re.I)[-1]
-                tala = re.split(r"Composer\s*:", tala, flags=re.I)[0].strip()
+                tala = re.split(r"(?:\n|\r|Composer|Language|Click|God)\s*[:\s]?", tala, flags=re.I)[0].strip()
             if _COMPOSER_RE.search(p_text):
                 a = p.find("a", href=re.compile(r"co\d+", re.I))
                 if a:
                     composer = _text(a)
                 else:
                     raw = re.split(r"Composer\s*:", p_text, flags=re.I)[-1]
-                    composer = re.split(r"Language\s*:", raw, flags=re.I)[0].strip()
+                    composer = re.split(r"(?:\n|\r|Language|Click|God|taaLam)\s*[:\s]?", raw, flags=re.I)[0].strip()
             if _LANGUAGE_RE.search(p_text):
                 raw = re.split(r"Language\s*:", p_text, flags=re.I)[-1]
-                language = re.split(r"Click\s+to\s+view", raw, flags=re.I)[0].strip()
+                language = re.split(r"(?:\n|\r|Click|God|taaLam|Composer)\s*[:\s]?", raw, flags=re.I)[0].strip()
             if _DEITY_RE.search(p_text):
                 raw = re.split(r"God\s*:", p_text, flags=re.I)[-1]
-                deity = re.split(r"(?:taaLam|Composer|Language|Click)\s*[:\s]", raw, flags=re.I)[0].strip()
+                deity = re.split(r"(?:\n|\r|taaLam|Composer|Language|Click)\s*[:\s]?", raw, flags=re.I)[0].strip()
             continue
 
         # ---- Lyric content --------------------------------------------------
@@ -322,13 +322,59 @@ def parse_krithi_page(html: str, page_id: int) -> dict | None:
         if not pallavi:
             return None
 
-    # Fallback raga extraction: scan all <a> tags with raga hrefs
+    # Fallback metadata extraction from td if not found in <p> tags
     if not raga_name:
         for a in td.find_all("a", href=re.compile(r"raga", re.I)):
             candidate = _text(a).strip()
             if candidate and not re.match(r"https?://", candidate):
                 raga_name = candidate
                 break
+    if not raga_name:
+        td_text = td.get_text()
+        if _RAAGAM_RE.search(td_text):
+            raw = re.split(r"raagam\s*:", td_text, flags=re.I)[1]
+            raw = re.split(r"(?:\n|\r|\bt[aA]{1,2}[lL][aA]m\s*:|\bComposer\s*:|\bLanguage\s*:|\bAa\s*:)", raw, flags=re.I)[0].strip()
+            raw = re.sub(r"\s+", " ", raw)
+            if raw and len(raw) < 60:
+                raga_name = raw
+
+    if not composer:
+        a = td.find("a", href=re.compile(r"co\d+", re.I))
+        if a:
+            composer = _text(a)
+        else:
+            td_text = td.get_text()
+            if _COMPOSER_RE.search(td_text):
+                raw = re.split(r"Composer\s*:", td_text, flags=re.I)[1]
+                raw = re.split(r"(?:\n|\r|Language|Click|God|taaLam)\s*[:\s]?", raw, flags=re.I)[0].strip()
+                raw = re.sub(r"\s+", " ", raw)
+                if raw and len(raw) < 80:
+                    composer = raw
+
+    if not tala:
+        td_text = td.get_text()
+        if _TAALAM_RE.search(td_text):
+            raw = re.split(r"taaLam\s*:", td_text, flags=re.I)[1]
+            raw = re.split(r"(?:\n|\r|Composer|Language|Click|God)\s*[:\s]?", raw, flags=re.I)[0].strip()
+            raw = re.sub(r"\s+", " ", raw)
+            if raw and len(raw) < 50:
+                tala = raw
+
+    if not arohana or not avarohana:
+        td_text = td.get_text()
+        for line in td_text.splitlines():
+            line = line.strip()
+            if not arohana and _AROHANA_RE.match(line):
+                arohana = re.sub(r"Aa\s*:", "", line, flags=re.I).strip()
+            elif not avarohana and _AVAROHANA_RE.match(line):
+                avarohana = re.sub(r"Av\s*:", "", line, flags=re.I).strip()
+
+    # Clean trailing punctuation and whitespace
+    raga_name = re.sub(r"[\.:,;]+$", "", raga_name).strip()
+    composer = re.sub(r"[\.:,;]+$", "", composer).strip()
+    tala = re.sub(r"[\.:,;]+$", "", tala).strip()
+    language = re.sub(r"[\.:,;]+$", "", language).strip()
+    deity = re.sub(r"[\.:,;]+$", "", deity).strip()
 
     return {
         "page_id": page_id,
