@@ -1,4 +1,6 @@
-# Shuddha Sangeetham — Admin CMS
+# Shuddha Sangeetham — Admin CMS (Legacy)
+
+> **Notice:** This Flask admin CMS (`ss-admin`) has been retired and stopped on Anjaneya. All composition/krithi management, reference entities, bulk import, and the mobile delta sync endpoint (`/api/sync`) have been consolidated into `ss-studio` (`admin.shuddhasangeetham.in`). See `studio/README.md`.
 
 Two components:
 
