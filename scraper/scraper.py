@@ -26,6 +26,15 @@ from pathlib import Path
 import requests
 from bs4 import BeautifulSoup
 
+from canonical import (
+    clean_lyrics_text,
+    clean_title,
+    canon_raga,
+    canon_composer,
+    canon_tala,
+    strip_diacritics,
+)
+
 # ---------------------------------------------------------------------------
 # Config
 # ---------------------------------------------------------------------------
@@ -36,11 +45,13 @@ END_N = 20000
 
 DATA_DIR = Path(__file__).parent / "data"
 RAW_DIR = DATA_DIR / "raw"
+HTML_DIR = DATA_DIR / "html"
 FAILED_LOG = DATA_DIR / "failed.log"
 
-# Polite delay range (seconds) — stays well under any reasonable rate limit
-DELAY_MIN = 2.0
-DELAY_MAX = 3.5
+# Polite delay range (seconds per worker)
+DELAY_MIN = 0.3
+DELAY_MAX = 0.6
+DEFAULT_WORKERS = 3
 
 HEADERS = {
     "User-Agent": (
@@ -74,27 +85,45 @@ def _text(element) -> str:
     return element.get_text(separator=" ", strip=True) if element else ""
 
 
-# Exact section label (whole <p> is just the label, optionally with raga name suffix for ragamalikas)
-# e.g. "pallavi", "caraNam 1", "caraNam 1naaTTai kurinji"
-_SECTION_LABEL_RE = re.compile(
-    r"^\s*(pallavi|anupallavi|caraNam\s*\d*|caranam\s*\d*|charanam\s*\d*|"
-    r"madhyama\s*kaalam|chitta\s*swaram|swarajati|meaning|notation|other\s*information)",
+# Section headings (pallavi, anupallavi, charanams, etc.)
+_SECTION_HEADING_RE = re.compile(
+    r"^\s*(pallavi|anupallavi|samash[tT]i\s*c[ha]raNam|c[ha]raNam\s*\d*|charanam\s*\d*|madhyama\s*k[aA]lam|chitta\s*swaram|swarajati|muktAyi\s*swaram)\b\s*[:\.-]?",
     re.I,
 )
-# Kept for backward-compat in exact-match checks
-_SECTION_RE = _SECTION_LABEL_RE
 
-# Swara notation lines — skip these (sol-fa syllables only, no vowels)
+# Hard stop boundaries: meanings, notations, transliterations, credits, footers
+_STOP_BOUNDARIES_RE = re.compile(
+    r"^\s*(?:"
+    r"(?:meaning|full\s*meaning|notation|full\s*notation|(?:more|other)\s*information|information)\b|"
+    r"(?:tamil|telugu|kannada|malayalam|devanagari|hindi|sanskrit)\s*transliteration\b|"
+    r"(?:lyrics|notation|lyrics\s*and\s*notation)?\s*(?:contributed|submitted)\s*by\b|"
+    r"lyrics\s*from\s*compositions\b|"
+    r"(?:click\s*here|audio\s*here|notation\s*available|gayaka)\b|"
+    r"first\b\s*\||previous\b\s*\||contact\s*us\b|back\s*to\s*karnatik\b|royal\s*carpet\b|"
+    r"updated\s*on\s*\d"
+    r")\s*[:\.-]?",
+    re.I,
+)
+
+# Indic script Unicode block
+_INDIC_SCRIPT_RE = re.compile(r"[\u0900-\u0D7F]")
+
+# Swara notation lines — skip these
 _SWARA_RE = re.compile(r"^[srgmpdn,;|.()\s\d]+$", re.I)
 
-# Metadata labels that appear inline in the content TD
+# Metadata labels that appear inline
 _RAAGAM_RE = re.compile(r"raagam\s*:", re.I)
-_TAALAM_RE = re.compile(r"taaLam\s*:", re.I)
+_TAALAM_RE = re.compile(r"t[aA]{1,2}[lL][aA]m\s*:", re.I)
 _COMPOSER_RE = re.compile(r"Composer\s*:", re.I)
 _LANGUAGE_RE = re.compile(r"Language\s*:", re.I)
 _AROHANA_RE = re.compile(r"Aa\s*:", re.I)
 _AVAROHANA_RE = re.compile(r"Av\s*:", re.I)
 _DEITY_RE = re.compile(r"God\s*:", re.I)
+
+_COMP_TYPE_RE = re.compile(
+    r"\b(bhajan|kaNNi|kanni|noTTusvar[aA]|nottaswara|nottuswara|nottu\b|varnam|varNa|tillAnA|tillana|padam|javali|swarajati)\b",
+    re.I,
+)
 
 
 def _get_content_td(soup: BeautifulSoup):
@@ -110,27 +139,14 @@ def parse_krithi_page(html: str, page_id: int) -> dict | None:
     """
     Parse a karnatik.com composition page.
 
-    Actual page structure (verified against live pages):
-      - Two-column table; right TD (width=100%) holds everything.
-      - Content is nested inside <font> tags so td.children gives only ~4 nodes.
-      - Use td.find_all('p') / td.find_all('hr') to traverse in document order.
-
-    <p> index (typical):
-      [0]  empty
-      [1]  "alai paayudE  raagam: kaanaDaa"   ← name + raga merged
-      [2]  "22 kharaharapriya janya  Aa: ...  Av: ..."  ← italic block
-      [3]  "taaLam: aadi  Composer: ...  Language: Tamil  Click to view in: ..."
-      [4]  "pallavi"
-      [5]  lyric text
-      [6]  "anupallavi"
-      ...
-      [18] "Meaning:"   ← stop here
-
-    <hr> tags: 5 total on a typical page; first separates header from meta+lyrics,
-    the one before Meaning separates lyrics from translations.
-    We stop at the <p> containing "Meaning" rather than relying on hr count.
+    Line-stream architecture:
+      - Strips rogue mid-document tags (</body></html>) that break DOM tree parsers.
+      - Converts <br>, <p>, <tr>, <hr> into newlines so inline charanams are not flattened.
+      - Scans lines linearly, cleanly stopping at meaning / transliterations / footers.
+      - Normalizes metadata (raga, composer, tala, title) and strips ITRANS/diacritics from lyrics.
     """
-    soup = BeautifulSoup(html, "lxml")
+    html_clean = re.sub(r"</?(?:html|body|head)[^>]*>", "", html, flags=re.I)
+    soup = BeautifulSoup(html_clean, "lxml")
 
     title_tag = soup.find("title")
     title = _text(title_tag)
@@ -141,240 +157,171 @@ def parse_krithi_page(html: str, page_id: int) -> dict | None:
     if td is None:
         return None
 
-    # ---- Krithi name from <title> ----------------------------------------
-    name = title.split(" - ", 1)[1].strip() if " - " in title else ""
+    # Title extraction (handles both "Carnatic Songs - name" and "Carnatic Songs: name")
+    raw_name = re.sub(r"^(?:Carnatic\s+Songs\s*[:\-]\s*)", "", title, flags=re.I).strip()
+    if " - " in raw_name:
+        raw_name = raw_name.split(" - ", 1)[1].strip()
+    name = clean_title(raw_name)
 
-    # Detect composition type from title/name (bhajan, kaNNi, noTTusvarA, etc.)
-    _COMP_TYPE_RE = re.compile(
-        r"\b(bhajan|kaNNi|kanni|noTTusvar[aA]|nottaswara|nottuswara|nottu\b|varnam|varNa|tillAnA|tillana|padam|javali|swarajati)\b",
-        re.I,
-    )
+    # Fallback to Song: <name> in body if title was empty
+    if not name:
+        song_m = re.search(r"Song\s*:\s*([^<\n\r]+)", td.get_text())
+        if song_m:
+            name = clean_title(song_m.group(1).strip())
+
     comp_type_m = _COMP_TYPE_RE.search(name)
     composition_type = comp_type_m.group(1).lower() if comp_type_m else ""
 
-    # ---- Walk all <p> elements inside the TD in document order -------------
-    all_ps = td.find_all("p")
+    # Extract metadata links from DOM before conversion
+    raga_a = td.find("a", href=re.compile(r"raga", re.I))
+    raga_name = canon_raga(_text(raga_a)) if raga_a else ""
 
-    raga_name = ""
-    arohana = ""
-    avarohana = ""
+    comp_a = td.find("a", href=re.compile(r"co\d+", re.I))
+    composer = canon_composer(_text(comp_a)) if comp_a else ""
+
+    # Convert line break elements into newlines so verses and inline charanams aren't collapsed
+    for elem in td.find_all(["br", "p", "tr", "div", "hr"]):
+        elem.insert_after("\n")
+
+    lines = [l.strip() for l in td.get_text().splitlines() if l.strip()]
+
     tala = ""
-    composer = ""
     language = ""
     deity = ""
-    pallavi_parts: list[str] = []
-    anupallavi_parts: list[str] = []
-    charanam_parts: list[str] = []
+    arohana = ""
+    avarohana = ""
+
+    pallavi_lines: list[str] = []
+    anupallavi_lines: list[str] = []
+    charanams: list[tuple[str, list[str]]] = []
+    current_charanam: list[str] = []
+    current_charanam_label = "1"
+
     current_section: str | None = None
     lyrics_started = False
 
-    for p in all_ps:
-        p_text = p.get_text(separator=" ", strip=True)
-        p_stripped = p_text.strip()
-
-        # Stop at Meaning / Notation / Other information
-        if re.match(r"^(Meaning|Notation|Other\s+information)\s*[:\.]?$", p_stripped, re.I):
+    for line in lines:
+        # Check hard stop boundaries
+        if _STOP_BOUNDARIES_RE.search(line):
+            break
+        if lyrics_started and _INDIC_SCRIPT_RE.search(line):
+            break
+        if lyrics_started and line.startswith(":"):
+            # Line starting with colon during lyrics is English meaning/commentary
             break
 
-        # ---- Section label detection ----------------------------------------
-        # Labels may have content on the same line:
-        #   "pallavi sarasIruhAkSi..." → label + inline lyric
-        #   "pallavisaavEri"           → ragamalika label + raga name (no lyric)
-        #   "caraNam 1naaTTai kurinji" → caranam label + raga name
-        m_label = _SECTION_LABEL_RE.match(p_stripped)
-        if m_label:
-            label = m_label.group(1).lower().strip()
-            remainder = p_stripped[m_label.end():].strip()
+        # Check section heading
+        m_sec = _SECTION_HEADING_RE.match(line)
+        if m_sec:
+            sec_raw = m_sec.group(1).lower().strip()
+            remainder = line[m_sec.end():].strip()
+            remainder = re.sub(r"^[:\.-]\s*", "", remainder).strip()
 
-            if label == "pallavi":
+            lyrics_started = True
+
+            if "pallavi" in sec_raw and "anupallavi" not in sec_raw:
                 current_section = "pallavi"
-                lyrics_started = True
-            elif label == "anupallavi":
+                if remainder and not _SWARA_RE.match(remainder):
+                    pallavi_lines.append(remainder)
+            elif "anupallavi" in sec_raw:
                 current_section = "anupallavi"
-            elif re.match(r"caran|charanam", label, re.I):
-                current_section = "caranam"
-            # madhyama kaalam / chitta swaram / swarajati stay in current section
-
-            # If there's lyric text after the label on the same line, capture it.
-            # Exclude pure raga-name suffixes (no spaces after single word) and swara lines.
-            if remainder and " " in remainder and not _SWARA_RE.match(remainder):
-                if current_section == "pallavi":
-                    pallavi_parts.append(remainder)
-                elif current_section == "anupallavi":
-                    anupallavi_parts.append(remainder)
-                elif current_section == "caranam":
-                    charanam_parts.append(remainder)
+                if remainder and not _SWARA_RE.match(remainder):
+                    anupallavi_lines.append(remainder)
+            else:  # charanam / samashti charanam
+                current_section = "charanam"
+                if current_charanam:
+                    charanams.append((current_charanam_label, current_charanam))
+                    current_charanam = []
+                num_m = re.search(r"\d+", sec_raw)
+                current_charanam_label = num_m.group(0) if num_m else str(len(charanams) + 1)
+                if remainder and not _SWARA_RE.match(remainder):
+                    current_charanam.append(remainder)
             continue
 
-        # ---- Metadata (before first lyric section label) --------------------
         if not lyrics_started:
-            # P[1]: "name  raagam: ragalink"
-            if _RAAGAM_RE.search(p_text):
-                a = p.find("a", href=re.compile(r"raga", re.I))
-                if a:
-                    raga_name = _text(a)
-                else:
-                    raw_raga = re.split(r"raagam\s*:", p_text, flags=re.I)[-1].strip()
-                    # Strip trailing metadata labels (taaLam:/Composer:/Language:) if raga is empty
-                    raga_name = re.split(r"\s*(?:taaLam|Composer|Language)\s*:", raw_raga, flags=re.I)[0].strip()
-                # name may be embedded before "raagam:" in P[1]
-                if not name:
-                    before_raga = re.split(r"raagam\s*:", p_text, flags=re.I)[0].strip()
-                    if before_raga:
-                        name = before_raga
-
-            # P[2]: italic block with arohana / avarohana
-            elif p.find("i") or (_AROHANA_RE.search(p_text) or _AVAROHANA_RE.search(p_text)):
-                for line in p.get_text(separator="\n", strip=True).splitlines():
-                    line = line.strip()
-                    if _AROHANA_RE.match(line):
-                        arohana = re.sub(r"Aa\s*:", "", line, flags=re.I).strip()
-                    elif _AVAROHANA_RE.match(line):
-                        avarohana = re.sub(r"Av\s*:", "", line, flags=re.I).strip()
-
-            # P[3]: taaLam / Composer / Language (all in one <p>)
-            if _TAALAM_RE.search(p_text):
-                tala = re.split(r"taaLam\s*:", p_text, flags=re.I)[-1]
-                tala = re.split(r"(?:\n|\r|Composer|Language|Click|God)\s*[:\s]?", tala, flags=re.I)[0].strip()
-            if _COMPOSER_RE.search(p_text):
-                a = p.find("a", href=re.compile(r"co\d+", re.I))
-                if a:
-                    composer = _text(a)
-                else:
-                    raw = re.split(r"Composer\s*:", p_text, flags=re.I)[-1]
-                    composer = re.split(r"(?:\n|\r|Language|Click|God|taaLam)\s*[:\s]?", raw, flags=re.I)[0].strip()
-            if _LANGUAGE_RE.search(p_text):
-                raw = re.split(r"Language\s*:", p_text, flags=re.I)[-1]
-                language = re.split(r"(?:\n|\r|Click|God|taaLam|Composer)\s*[:\s]?", raw, flags=re.I)[0].strip()
-            if _DEITY_RE.search(p_text):
-                raw = re.split(r"God\s*:", p_text, flags=re.I)[-1]
-                deity = re.split(r"(?:\n|\r|taaLam|Composer|Language|Click)\s*[:\s]?", raw, flags=re.I)[0].strip()
+            if not raga_name and _RAAGAM_RE.search(line):
+                raw = re.split(r"raagam\s*:", line, flags=re.I)[-1]
+                raw = re.split(r"(?:\bt[aA]{1,2}[lL][aA]m\s*:|\bComposer\s*:|\bLanguage\s*:)", raw, flags=re.I)[0]
+                raga_name = canon_raga(raw.strip())
+            if not tala and _TAALAM_RE.search(line):
+                raw = re.split(r"t[aA]{1,2}[lL][aA]m\s*:", line, flags=re.I)[-1]
+                raw = re.split(r"(?:\bComposer\s*:|\bLanguage\s*:|\bGod\s*:|\bClick\b)", raw, flags=re.I)[0]
+                tala = canon_tala(raw.strip())
+            if not composer and _COMPOSER_RE.search(line):
+                raw = re.split(r"Composer\s*:", line, flags=re.I)[-1]
+                raw = re.split(r"(?:\bLanguage\s*:|\bGod\s*:|\bClick\b)", raw, flags=re.I)[0]
+                composer = canon_composer(raw.strip())
+            if not language and _LANGUAGE_RE.search(line):
+                raw = re.split(r"Language\s*:", line, flags=re.I)[-1]
+                raw = re.split(r"(?:\bGod\s*:|\bClick\b)", raw, flags=re.I)[0]
+                language = clean_title(raw.strip())
+            if not deity and _DEITY_RE.search(line):
+                raw = re.split(r"God\s*:", line, flags=re.I)[-1]
+                deity = clean_title(raw.strip())
+            if not arohana and _AROHANA_RE.search(line):
+                arohana = re.sub(r".*?Aa\s*:\s*", "", line, flags=re.I).strip()
+            if not avarohana and _AVAROHANA_RE.search(line):
+                avarohana = re.sub(r".*?Av\s*:\s*", "", line, flags=re.I).strip()
             continue
 
-        # ---- Lyric content --------------------------------------------------
-        if not p_stripped:
+        # Inside lyrics
+        if _SWARA_RE.match(line):
             continue
-
-        # Skip swara notation lines (e.g. "srgsr,mpdpd,|RSnd...")
-        if _SWARA_RE.match(p_stripped):
-            continue
-
-        # Skip italic sub-raga info blocks inside ragamalikas
-        # (arohana/avarohana lines that appear between caranams)
-        if p.find("i") and (_AROHANA_RE.search(p_stripped) or _AVAROHANA_RE.search(p_stripped)
-                             or re.match(r"^\d+\s+\w", p_stripped)):
+        if _AROHANA_RE.search(line) or _AVAROHANA_RE.search(line) or re.match(r"^\d+\s+\w", line):
             continue
 
         if current_section == "pallavi":
-            pallavi_parts.append(p_stripped)
+            pallavi_lines.append(line)
         elif current_section == "anupallavi":
-            anupallavi_parts.append(p_stripped)
-        elif current_section == "caranam":
-            charanam_parts.append(p_stripped)
+            anupallavi_lines.append(line)
+        elif current_section == "charanam":
+            current_charanam.append(line)
 
-    pallavi = "\n".join(pallavi_parts).strip()
-    anupallavi = "\n".join(anupallavi_parts).strip()
-    charanam = "\n".join(charanam_parts).strip()
+    if current_charanam:
+        charanams.append((current_charanam_label, current_charanam))
 
-    # Fallback for non-krithi structured pages (bhajan, kaNNi, noTTusvarA, etc.):
-    # if no section labels were found but the page has carnatic metadata, collect
-    # all non-metadata paragraphs as the lyric body stored in `pallavi`.
-    if not pallavi:
-        # Must have carnatic metadata labels present (even if values are empty)
+    # Format charanams
+    if len(charanams) == 1:
+        charanam_text = "\n".join(charanams[0][1])
+    elif len(charanams) > 1:
+        blocks = []
+        for lbl, ch_lines in charanams:
+            blocks.append(f"{lbl}:\n" + "\n".join(ch_lines))
+        charanam_text = "\n\n".join(blocks)
+    else:
+        charanam_text = ""
+
+    pallavi = clean_lyrics_text("\n".join(pallavi_lines))
+    anupallavi = clean_lyrics_text("\n".join(anupallavi_lines))
+    charanam = clean_lyrics_text(charanam_text)
+
+    # Fallback for non-krithi structured pages (bhajan, noTTusvarA, etc.)
+    if not pallavi and not charanam:
         td_full_text = td.get_text()
-        has_carnatic_labels = (
-            _RAAGAM_RE.search(td_full_text) and _TAALAM_RE.search(td_full_text)
-        )
-        if not has_carnatic_labels:
+        has_carnatic = _RAAGAM_RE.search(td_full_text) or _TAALAM_RE.search(td_full_text)
+        if not has_carnatic:
             return None
-        fallback_parts: list[str] = []
-        metadata_done = False
-        for p in td.find_all("p"):
-            p_stripped = p.get_text(separator=" ", strip=True).strip()
-            if not p_stripped:
-                continue
-            if re.match(r"^(Meaning|Notation|Other\s+information|Contact\s+us)\s*[:\.]?$", p_stripped, re.I):
+        fallback_lines: list[str] = []
+        meta_passed = False
+        for line in lines:
+            if _STOP_BOUNDARIES_RE.search(line):
                 break
-            # Skip lines that look like metadata labels
-            if (_RAAGAM_RE.search(p_stripped) or _TAALAM_RE.search(p_stripped)
-                    or _AROHANA_RE.search(p_stripped) or _AVAROHANA_RE.search(p_stripped)):
-                metadata_done = True
+            if (_RAAGAM_RE.search(line) or _TAALAM_RE.search(line) or
+                    _AROHANA_RE.search(line) or _AVAROHANA_RE.search(line) or
+                    _COMPOSER_RE.search(line) or _LANGUAGE_RE.search(line)):
+                meta_passed = True
                 continue
-            # Skip raga scale lines (e.g. "29 dheera shankaraabharaNam mela Aa: ...")
-            if re.match(r"^\d+\s+\w.*\bAa\s*:", p_stripped):
-                metadata_done = True
+            if re.match(r"^\d+\s+\w.*\bAa\s*:", line):
+                meta_passed = True
                 continue
-            if not metadata_done:
+            if not meta_passed:
                 continue
-            # Skip swara notation lines
-            if _SWARA_RE.match(p_stripped):
+            if _SWARA_RE.match(line) or re.match(r"^\d+$", line) or len(line) <= 1:
                 continue
-            # Skip numbered verse markers (e.g. "1", "2", ...)
-            if re.match(r"^\d+$", p_stripped):
-                continue
-            # Skip stray single-character artifacts
-            if len(p_stripped) <= 1:
-                continue
-            fallback_parts.append(p_stripped)
-        pallavi = "\n".join(fallback_parts).strip()
-        # Strip stray leading punctuation/symbols from fallback lyrics
-        pallavi = re.sub(r"^[<>\|\s]+", "", pallavi).strip()
+            fallback_lines.append(line)
+        pallavi = clean_lyrics_text("\n".join(fallback_lines))
         if not pallavi:
             return None
-
-    # Fallback metadata extraction from td if not found in <p> tags
-    if not raga_name:
-        for a in td.find_all("a", href=re.compile(r"raga", re.I)):
-            candidate = _text(a).strip()
-            if candidate and not re.match(r"https?://", candidate):
-                raga_name = candidate
-                break
-    if not raga_name:
-        td_text = td.get_text()
-        if _RAAGAM_RE.search(td_text):
-            raw = re.split(r"raagam\s*:", td_text, flags=re.I)[1]
-            raw = re.split(r"(?:\n|\r|\bt[aA]{1,2}[lL][aA]m\s*:|\bComposer\s*:|\bLanguage\s*:|\bAa\s*:)", raw, flags=re.I)[0].strip()
-            raw = re.sub(r"\s+", " ", raw)
-            if raw and len(raw) < 60:
-                raga_name = raw
-
-    if not composer:
-        a = td.find("a", href=re.compile(r"co\d+", re.I))
-        if a:
-            composer = _text(a)
-        else:
-            td_text = td.get_text()
-            if _COMPOSER_RE.search(td_text):
-                raw = re.split(r"Composer\s*:", td_text, flags=re.I)[1]
-                raw = re.split(r"(?:\n|\r|Language|Click|God|taaLam)\s*[:\s]?", raw, flags=re.I)[0].strip()
-                raw = re.sub(r"\s+", " ", raw)
-                if raw and len(raw) < 80:
-                    composer = raw
-
-    if not tala:
-        td_text = td.get_text()
-        if _TAALAM_RE.search(td_text):
-            raw = re.split(r"taaLam\s*:", td_text, flags=re.I)[1]
-            raw = re.split(r"(?:\n|\r|Composer|Language|Click|God)\s*[:\s]?", raw, flags=re.I)[0].strip()
-            raw = re.sub(r"\s+", " ", raw)
-            if raw and len(raw) < 50:
-                tala = raw
-
-    if not arohana or not avarohana:
-        td_text = td.get_text()
-        for line in td_text.splitlines():
-            line = line.strip()
-            if not arohana and _AROHANA_RE.match(line):
-                arohana = re.sub(r"Aa\s*:", "", line, flags=re.I).strip()
-            elif not avarohana and _AVAROHANA_RE.match(line):
-                avarohana = re.sub(r"Av\s*:", "", line, flags=re.I).strip()
-
-    # Clean trailing punctuation and whitespace
-    raga_name = re.sub(r"[\.:,;]+$", "", raga_name).strip()
-    composer = re.sub(r"[\.:,;]+$", "", composer).strip()
-    tala = re.sub(r"[\.:,;]+$", "", tala).strip()
-    language = re.sub(r"[\.:,;]+$", "", language).strip()
-    deity = re.sub(r"[\.:,;]+$", "", deity).strip()
 
     return {
         "page_id": page_id,
@@ -409,6 +356,12 @@ def load_already_scraped() -> set[int]:
     return scraped
 
 
+import threading
+from concurrent.futures import ThreadPoolExecutor
+
+_FAILED_LOCK = threading.Lock()
+
+
 def load_failed() -> set[int]:
     """Return set of previously failed page IDs."""
     failed = set()
@@ -421,8 +374,9 @@ def load_failed() -> set[int]:
 
 
 def append_failed(page_id: int) -> None:
-    with open(FAILED_LOG, "a") as f:
-        f.write(f"{page_id}\n")
+    with _FAILED_LOCK:
+        with open(FAILED_LOG, "a") as f:
+            f.write(f"{page_id}\n")
 
 
 def load_empty_raga() -> list[int]:
@@ -438,20 +392,54 @@ def load_empty_raga() -> list[int]:
     return sorted(empty)
 
 
-def scrape(start: int, end: int, retry_failed: bool = False, missing_raga_only: bool = False) -> None:
+def scrape_worker(page_id: int, session: requests.Session) -> tuple[int, str, str]:
+    url = BASE_URL.format(n=page_id)
+    html_path = HTML_DIR / f"{page_id}.html"
+    out_path = RAW_DIR / f"{page_id}.json"
+
+    html_text = ""
+    if html_path.exists():
+        html_text = html_path.read_text(encoding="utf-8", errors="replace")
+    else:
+        try:
+            resp = session.get(url, timeout=20)
+            if resp.status_code == 404:
+                return page_id, "skipped_404", ""
+            if resp.status_code != 200:
+                append_failed(page_id)
+                return page_id, f"http_{resp.status_code}", ""
+            html_text = resp.content.decode("utf-8", errors="replace")
+            html_path.write_text(html_text, encoding="utf-8")
+        except requests.exceptions.RequestException as exc:
+            append_failed(page_id)
+            return page_id, f"error_{exc}", ""
+
+    krithi = parse_krithi_page(html_text, page_id)
+    if krithi is None:
+        return page_id, "skipped_no_content", ""
+
+    out_path.write_text(json.dumps(krithi, ensure_ascii=False, indent=2), encoding="utf-8")
+    return page_id, "success", krithi.get("name", "")
+
+
+def scrape(
+    start: int,
+    end: int,
+    workers: int = DEFAULT_WORKERS,
+    force: bool = False,
+    retry_failed: bool = False,
+    missing_raga_only: bool = False,
+) -> None:
     RAW_DIR.mkdir(parents=True, exist_ok=True)
+    HTML_DIR.mkdir(parents=True, exist_ok=True)
     DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    already_scraped = load_already_scraped()
+    already_scraped = set() if force else load_already_scraped()
     previously_failed = load_failed()
-
-    session = requests.Session()
-    session.headers.update(HEADERS)
 
     if retry_failed:
         ids_to_scrape = sorted(previously_failed - already_scraped)
         log.info("Retrying %d previously failed pages", len(ids_to_scrape))
-        # Clear the failed log so we start fresh
         FAILED_LOG.write_text("")
     elif missing_raga_only:
         ids_to_scrape = [pid for pid in load_empty_raga() if start <= pid <= end]
@@ -462,46 +450,53 @@ def scrape(start: int, end: int, retry_failed: bool = False, missing_raga_only: 
     else:
         ids_to_scrape = [n for n in range(start, end + 1) if n not in already_scraped]
         log.info(
-            "Scraping pages %d–%d (%d remaining, %d already done)",
-            start, end, len(ids_to_scrape), len(already_scraped),
+            "Scraping pages %d–%d (%d to scrape, %d already done, %d workers)",
+            start, end, len(ids_to_scrape), len(already_scraped), workers,
         )
 
-    success = 0
-    skipped = 0
-    failed = 0
+    if not ids_to_scrape:
+        log.info("No pages to scrape.")
+        return
 
-    for i, page_id in enumerate(ids_to_scrape):
-        url = BASE_URL.format(n=page_id)
-        try:
-            resp = session.get(url, timeout=20)
-            if resp.status_code == 404:
-                log.debug("404 — %s (gap page, skipping)", url)
+    thread_local = threading.local()
+
+    def get_session():
+        if not hasattr(thread_local, "session"):
+            s = requests.Session()
+            s.headers.update(HEADERS)
+            thread_local.session = s
+        return thread_local.session
+
+    def task(pid):
+        sess = get_session()
+        res = scrape_worker(pid, sess)
+        time.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
+        return res
+
+    success = skipped = failed = 0
+    t0 = time.time()
+
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        for i, (pid, status, name) in enumerate(executor.map(task, ids_to_scrape), 1):
+            if status == "success":
+                success += 1
+                if i % 25 == 0 or i == len(ids_to_scrape):
+                    rate = i / max(0.001, time.time() - t0)
+                    log.info(
+                        "[%d/%d] (%.1f/s) Saved c%d — %s",
+                        i, len(ids_to_scrape), rate, pid, name,
+                    )
+            elif status.startswith("skipped"):
                 skipped += 1
-            elif resp.status_code != 200:
-                log.warning("HTTP %d — %s", resp.status_code, url)
-                append_failed(page_id)
-                failed += 1
             else:
-                krithi = parse_krithi_page(resp.text, page_id)
-                if krithi is None:
-                    log.debug("No composition content — %s", url)
-                    skipped += 1
-                else:
-                    out_path = RAW_DIR / f"{page_id}.json"
-                    out_path.write_text(json.dumps(krithi, ensure_ascii=False, indent=2), encoding="utf-8")
-                    log.info("[%d/%d] Saved %s — %s", i + 1, len(ids_to_scrape), page_id, krithi["name"])
-                    success += 1
+                failed += 1
+                log.warning("[%d/%d] Failed c%d: %s", i, len(ids_to_scrape), pid, status)
 
-        except requests.exceptions.RequestException as exc:
-            log.error("Network error on %s: %s", url, exc)
-            append_failed(page_id)
-            failed += 1
-
-        # Polite delay — skip after the last item
-        if i < len(ids_to_scrape) - 1:
-            time.sleep(random.uniform(DELAY_MIN, DELAY_MAX))
-
-    log.info("Done. success=%d  skipped=%d  failed=%d", success, skipped, failed)
+    elapsed = time.time() - t0
+    log.info(
+        "Done in %.1fs. success=%d  skipped=%d  failed=%d",
+        elapsed, success, skipped, failed,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -512,6 +507,8 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Scrape karnatik.com composition pages.")
     parser.add_argument("--start", type=int, default=START_N, help=f"First page ID (default {START_N})")
     parser.add_argument("--end", type=int, default=END_N, help=f"Last page ID (default {END_N})")
+    parser.add_argument("--workers", type=int, default=DEFAULT_WORKERS, help=f"Number of parallel workers (default {DEFAULT_WORKERS})")
+    parser.add_argument("--force", action="store_true", help="Re-scrape and overwrite existing raw JSONs")
     parser.add_argument(
         "--retry-failed",
         action="store_true",
@@ -524,15 +521,20 @@ def main() -> None:
     )
     args = parser.parse_args()
 
-    # Ensure log handler path is correct now that DATA_DIR may have been created
     DATA_DIR.mkdir(parents=True, exist_ok=True)
-    # Reconfigure file handler with correct path
     for handler in log.handlers[:]:
         if isinstance(handler, logging.FileHandler):
             log.removeHandler(handler)
     log.addHandler(logging.FileHandler(DATA_DIR / "scraper.log"))
 
-    scrape(args.start, args.end, retry_failed=args.retry_failed, missing_raga_only=args.missing_raga)
+    scrape(
+        args.start,
+        args.end,
+        workers=args.workers,
+        force=args.force,
+        retry_failed=args.retry_failed,
+        missing_raga_only=args.missing_raga,
+    )
 
 
 if __name__ == "__main__":
